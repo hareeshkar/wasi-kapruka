@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe, ShieldCheck } from 'lucide-react';
+import SignInPanel from './SignInPanel';
 
 interface OnboardingProps {
   onOnboard: (params: { occasion: string; budget: number; language: 'en' | 'si' | 'ta' }) => void;
   onStartDemo: () => void;
+  isSignedIn: boolean;
 }
 
 const occasions = [
@@ -18,10 +20,11 @@ const SLIDER_MIN = 1000;
 const SLIDER_MAX = 25000;
 const TICKS = [1000, 5000, 10000, 15000, 25000];
 
-export default function Onboarding({ onOnboard, onStartDemo }: OnboardingProps) {
+export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: OnboardingProps) {
   const [selectedOccasion, setSelectedOccasion] = useState('Birthday');
   const [budget, setBudget]   = useState(5000);
   const [language, setLanguage] = useState<'en' | 'si' | 'ta'>('en');
+  const [signInOpen, setSignInOpen] = useState(false);
 
   const handleStart = () => onOnboard({ occasion: selectedOccasion, budget, language });
 
@@ -38,6 +41,7 @@ export default function Onboarding({ onOnboard, onStartDemo }: OnboardingProps) 
       budgetLabel: 'YOUR BUDGET CEILING',
       cta: 'Consult Wasi Now →',
       demo: 'Guided Demo (90-sec)',
+      saveCta: 'Sign in to save this gift history',
     },
     si: {
       badge: 'කපෘක විශේෂ නියෝජිතයා',
@@ -48,6 +52,7 @@ export default function Onboarding({ onOnboard, onStartDemo }: OnboardingProps) 
       budgetLabel: 'ඔබේ උපරිම අයවැය',
       cta: 'වාසි සමඟ ආරම්භ කරන්න →',
       demo: '90-තත්පර සංදර්ශනය',
+      saveCta: 'මෙම තෑගි ඉතිහාසය සුරැකීමට පිවිසෙන්න',
     },
     ta: {
       badge: 'கப்ருகா சிறப்பு முகவர்',
@@ -58,6 +63,7 @@ export default function Onboarding({ onOnboard, onStartDemo }: OnboardingProps) 
       budgetLabel: 'உங்கள் பட்ஜெட்',
       cta: 'வாசியுடன் தொடங்கவும் →',
       demo: '90-வினாடி சுற்று',
+      saveCta: 'இந்த பரிசு வரலாற்றை சேமிக்க உள்நுழையவும்',
     },
   };
   const c = copy[language];
@@ -197,8 +203,28 @@ export default function Onboarding({ onOnboard, onStartDemo }: OnboardingProps) 
               {c.cta}
             </button>
           </div>
+
+          {/* Soft profile opt-in — only when not signed in */}
+          {!isSignedIn && (
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setSignInOpen(true)}
+                className="text-[11px] text-[#0A5C45] hover:text-[#0F6E56] font-semibold cursor-pointer inline-flex items-center gap-1.5 group"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                {c.saveCta}
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      <SignInPanel
+        open={signInOpen}
+        onClose={() => setSignInOpen(false)}
+        lang={language}
+      />
     </div>
   );
 }

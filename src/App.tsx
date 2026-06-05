@@ -1,22 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, Product, Order, City, OrderIntent } from './types';
+import { Sparkles } from 'lucide-react';
 import Onboarding from './components/Onboarding';
 import ChatSection from './components/ChatSection';
 import CartDrawer from './components/CartDrawer';
+import SignInPanel from './components/SignInPanel';
+import UserMenu from './components/UserMenu';
+import SaveCartBanner from './components/SaveCartBanner';
+import ProgressiveProfilePrompt from './components/ProgressiveProfilePrompt';
 import { useSupabaseCart } from './hooks/useSupabaseCart';
 import { useSupabaseChat } from './hooks/useSupabaseChat';
+import { useAuth } from './hooks/useAuth';
+import { useUserProfile, missingOptionalFields } from './hooks/useUserProfile';
+import { migrateGuestDataToUser } from './lib/auth-migration';
+import { profileToContext } from './lib/user-profile';
 
 export default function App() {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [language, setLanguage] = useState<'en' | 'si' | 'ta'>('en');
   const [budget, setBudget] = useState<number>(0);
   const [occasion, setOccasion] = useState<string>('');
-  const { cart, loading: cartLoading, addItem, removeItem, updateQty, clearCart } = useSupabaseCart();
+
+  // Auth + profile
+  const { user, loading: authLoading, signOut } = useAuth();
+  const ownerId = user?.id ?? null;
+  const { profile, save: saveProfile } = useUserProfile(ownerId);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [profilePromptOpen, setProfilePromptOpen] = useState(false);
+  const [showSaveBanner, setShowSaveBanner] = useState(false);
+  const bannerDismissed = useRef(false);
+
+  // Cart + chat — dual-mode (guest session_id or auth owner_id)
+  const { cart, loading: cartLoading, addItem, removeItem, updateQty, clearCart } = useSupabaseCart({ ownerId });
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderResult, setOrderResult] = useState<Order | null>(null);
 
   // Conversational state
-  const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, sessionId } = useSupabaseChat();
+  const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, sessionId } = useSupabaseChat({ ownerId });
   const [isStreaming, setIsStreaming] = useState(false);
 
   // Auto-fill intent extracted from chat (recipient, city, address, phone, message)
@@ -31,6 +51,38 @@ export default function App() {
   const discoverLoaded = useRef(false);
   const discoveryShown = useRef(false); // tracks whether first product carousel has been shown
 
+  // Migrate guest → user data when user signs in (runs once per user)
+  useEffect(() => {
+    if (!user?.id) return;
+    migrateGuestDataToUser(user.id).catch(err => console.error('[auth migration]', err));
+  }, [user?.id]);
+
+  // Trigger progressive profile prompt after first chat turn (if essentials missing)
+  useEffect(() => {
+    if (!user || !profile) return;
+    if (profile.profile_complete) return;
+    if (messages.length < 1) return;
+    // Defer so the chat has had time to render first
+    const t = setTimeout(() => setProfilePromptOpen(true), 4000);
+    return () => clearTimeout(t);
+  }, [user?.id, profile?.profile_complete, messages.length]);
+
+  // Auto-set onboarded=true when Supabase returns messages or cart (existing behavior)
+  useEffect(() => {
+    if (authLoading || chatLoading || cartLoading) return;
+    if (messages.length > 0 || cart.length > 0) {
+      setIsOnboarded(true);
+      if (messages.length > 0) discoveryShown.current = true;
+    }
+  }, [authLoading, chatLoading, cartLoading, messages.length, cart.length]);
+
+  // Surface the "save cart" banner after first add-to-cart when not signed in
+  // (only shown if user hasn't already dismissed it for this session)
+  useEffect(() => {
+    if (user) { setShowSaveBanner(false); return; }
+    if (cart.length >= 1 && !bannerDismissed.current) setShowSaveBanner(true);
+  }, [user, cart.length]);
+
   // Restore session from sessionStorage on mount (survives HMR / page refresh)
   useEffect(() => {
     const saved = sessionStorage.getItem('wasi_session');
@@ -44,14 +96,6 @@ export default function App() {
       } catch {}
     }
   }, []);
-
-  useEffect(() => {
-    if (chatLoading || cartLoading) return;
-    if (messages.length > 0 || cart.length > 0) {
-      setIsOnboarded(true);
-      if (messages.length > 0) discoveryShown.current = true;
-    }
-  }, [chatLoading, cartLoading, messages.length, cart.length]);
 
   useEffect(() => {
     if (discoverLoaded.current) return;
@@ -144,8 +188,10 @@ export default function App() {
           budget: params.budget,
           occasion: params.occasion,
           session_id: sessionId,
+          owner_id: ownerId,
           persist: false,
           cart: [],
+          profile: profileToContext(profile),
         })
       });
       const data = await res.json();
@@ -282,8 +328,10 @@ export default function App() {
           budget,
           occasion,
           session_id: sessionId,
+          owner_id: ownerId,
           persist: true,
           cart: cartForAI(),
+          profile: profileToContext(profile),
           lastCartAction: lastCartAction || undefined,
           // Pass current form state so wasi_get_form_state (V5) can return field-level status
           formState: orderIntent ? {
@@ -474,9 +522,11 @@ export default function App() {
           budget,
           occasion,
           session_id: sessionId,
+          owner_id: ownerId,
           persist: false,
           cart: cartSnapshot,
           lastCartAction: `Just added: ${product.name} (Rs.${price.toLocaleString()})`,
+          profile: profileToContext(profile),
         }),
       });
       const data = await res.json();
@@ -798,6 +848,21 @@ export default function App() {
               </div>
             )}
 
+            {/* Auth — Sign in button (guest) or UserMenu (authed) */}
+            {!authLoading && (
+              user ? (
+                <UserMenu lang={language} />
+              ) : (
+                <button
+                  onClick={() => setSignInOpen(true)}
+                  className="text-[11px] font-semibold text-white bg-[#0F6E56] hover:bg-[#0A5C45] px-3.5 py-1.5 rounded-full cursor-pointer active:scale-95 transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Sign in
+                </button>
+              )
+            )}
+
             {isOnboarded && (
               <button
                 onClick={() => { setIsOnboarded(false); void clearMessages(); void clearCart(); setOrderResult(null); }}
@@ -816,38 +881,74 @@ export default function App() {
           <Onboarding
             onOnboard={handleOnboard}
             onStartDemo={() => {}} // DEMO DISABLED — noop
+            isSignedIn={!!user}
           />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <div className="lg:col-span-7">
-              <ChatSection
-                messages={messages}
-                isStreaming={isStreaming}
-                onSendMessage={handleSendMessage}
+          <div className="space-y-4">
+            {/* Save-cart banner — only for guests, only when cart has items */}
+            {showSaveBanner && !user && (
+              <SaveCartBanner
+                visible={showSaveBanner}
+                itemsAdded={cart.length}
                 lang={language}
-                onAddToBundle={handleAddToCart}
-                onQuickReply={handleSendMessage}
-                cartSize={cart.length}
+                onSignIn={() => setSignInOpen(true)}
+                onDismiss={() => {
+                  bannerDismissed.current = true;
+                  setShowSaveBanner(false);
+                }}
               />
-            </div>
-            <div className="lg:col-span-5">
-              <CartDrawer
-                cart={cart}
-                lang={language}
-                onUpdateQty={handleUpdateQty}
-                onRemoveItem={handleRemoveItem}
-                onClearCart={handleClearCart}
-                onConfirmOrder={handleConfirmOrder}
-                isOrdering={isOrdering}
-                orderResult={orderResult}
-                onRenewOrder={handleRenewOrder}
-                isDemoMode={false}
-                orderIntent={orderIntent}
-              />
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              <div className="lg:col-span-7">
+                <ChatSection
+                  messages={messages}
+                  isStreaming={isStreaming}
+                  onSendMessage={handleSendMessage}
+                  lang={language}
+                  onAddToBundle={handleAddToCart}
+                  onQuickReply={handleSendMessage}
+                  cartSize={cart.length}
+                />
+              </div>
+              <div className="lg:col-span-5">
+                <CartDrawer
+                  cart={cart}
+                  lang={language}
+                  onUpdateQty={handleUpdateQty}
+                  onRemoveItem={handleRemoveItem}
+                  onClearCart={handleClearCart}
+                  onConfirmOrder={handleConfirmOrder}
+                  isOrdering={isOrdering}
+                  orderResult={orderResult}
+                  onRenewOrder={handleRenewOrder}
+                  isDemoMode={false}
+                  orderIntent={orderIntent}
+                />
+              </div>
             </div>
           </div>
         )}
       </main>
+
+      {/* ── Auth + Profile modals (rendered globally) ─────────────────────── */}
+      <SignInPanel
+        open={signInOpen}
+        onClose={() => setSignInOpen(false)}
+        lang={language}
+      />
+
+      {user && profilePromptOpen && missingOptionalFields(profile).length > 0 && (
+        <ProgressiveProfilePrompt
+          userId={user.id}
+          fields={missingOptionalFields(profile)}
+          onClose={() => setProfilePromptOpen(false)}
+          onComplete={async () => {
+            await saveProfile({ profile_complete: true });
+          }}
+          lang={language}
+        />
+      )}
 
       <footer className="py-5 border-t border-black/5 bg-white/70 backdrop-blur-sm text-center text-[10px] text-gray-400 font-mono">
         Wasi by Kapruka · AI Gift Concierge · Live MCP · {new Date().getFullYear()}

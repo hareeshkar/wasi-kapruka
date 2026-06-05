@@ -671,11 +671,13 @@ async function startServer() {
       const bodyItems = Array.isArray(body.items) ? body.items : [];
       let resolvedItems = bodyItems;
 
-      if (supabase && body.session_id) {
-        const { data, error } = await supabase
-          .from('cart_items')
-          .select('*')
-          .eq('session_id', body.session_id);
+      if (supabase && (body.session_id || body.owner_id)) {
+        // Auth: prefer owner_id; fall back to session_id for guest carts
+        const baseFilter = body.owner_id
+          ? supabase.from('cart_items').select('*').eq('owner_id', body.owner_id)
+          : supabase.from('cart_items').select('*').eq('session_id', body.session_id);
+
+        const { data, error } = await baseFilter;
         if (error) {
           console.error('[supabase order] cart load failed', error.message);
         } else if (data && data.length > 0) {
@@ -768,6 +770,30 @@ async function startServer() {
           grand_total:  computedTotal,
         },
       };
+
+      // ── Persist order to Supabase (when session_id OR owner_id present) ────
+      if (supabase && (body.session_id || body.owner_id) && order.order_ref) {
+        supabase.from('orders').insert({
+          session_id:     body.session_id,
+          owner_id:       body.owner_id || null,
+          kapruka_order_ref: order.order_ref,
+          total_lkr:      computedTotal,
+          delivery_fee:   deliveryFee,
+          items_total:    computedItemsTotal,
+          icing_charge:   icingCharge,
+          recipient_name: mcpPayload?.recipient?.name  || body.recipient_name,
+          recipient_phone: mcpPayload?.recipient?.phone || body.recipient_phone,
+          delivery_address: mcpPayload?.delivery?.address || body.address,
+          delivery_city:  mcpPayload?.delivery?.city || body.city,
+          delivery_date:  mcpPayload?.delivery?.date || body.delivery_date,
+          sender_name:    mcpPayload?.sender?.name || body.sender_name,
+          checkout_url:   order.checkout_url,
+          status:         'pending',
+        }).then(({ error }) => {
+          if (error) console.error('[supabase order] insert failed', error.message);
+        });
+      }
+
       res.json({ success: true, order });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -799,7 +825,9 @@ async function startServer() {
       lastCartAction,
       formState,
       session_id,
+      owner_id,
       persist = true,
+      profile,
     } = req.body;
 
     if (!message) {
@@ -836,7 +864,7 @@ async function startServer() {
     // it loses to the Sinhala persona. Prepending it overrides that decisively.
     const langLockLine = LANG_LOCK[language as string] ?? LANG_LOCK['en'];
 
-    // ── SESSION_CONTEXT (budget, occasion, cart) ───────────────────────────────
+    // ── SESSION_CONTEXT (budget, occasion, cart, profile) ──────────────────────
     const sessionContext = [
       'SESSION CONTEXT (authoritative — do not re-ask):',
       occasion ? `- Occasion: ${occasion} — prioritised search terms: ${OCCASION_HINTS[occasion] ?? 'chocolate'}` : '',
@@ -844,6 +872,10 @@ async function startServer() {
       `- Cart:\n${cartSummary}`,
       lastCartAction ? `- Recent cart action: ${lastCartAction}` : '',
       cartLines.length > 0 ? '- Do NOT recommend items already in cart unless asked.' : '',
+      // Personalized profile — only included when the user has signed up and the
+      // client has loaded their profile. Empty strings are filtered out.
+      owner_id ? '- Authenticated user — use their name in greetings; never re-ask their city, age, or typical recipient.' : '',
+      profile ? `- User profile: ${profile}` : '',
     ].filter(Boolean).join('\n');
 
     // Language lock is PREPENDED so it takes highest priority over the persona
@@ -903,10 +935,11 @@ async function startServer() {
         },
       );
 
-      if (supabase && persist && session_id) {
+      if (supabase && persist && (session_id || owner_id)) {
+        const baseRow = owner_id ? { owner_id, session_id } : { session_id };
         const { error } = await supabase.from('messages').insert([
-          { session_id, role: 'user', content: message },
-          { session_id, role: 'assistant', content: reply, tool_calls: toolCalls ?? null },
+          { ...baseRow, role: 'user',      content: message },
+          { ...baseRow, role: 'assistant', content: reply, tool_calls: toolCalls ?? null },
         ]);
         if (error) console.error('[supabase chat] insert failed', error.message);
       }
