@@ -918,6 +918,103 @@ async function startServer() {
     }
   });
 
+  // ── TTS: ElevenLabs text-to-speech ──────────────────────────────────────────
+  // Streams MP3 audio for any assistant message. Multilingual v2 supports
+  // Sinhala / Tamil / English in a single model — one voice for all 3 langs.
+  // Strips markdown before sending (we don't want to read out *stars* or # hashes).
+  // Caches at the CDN edge for 24h; per-message blob cache lives in the client.
+  const TTS_MAX_CHARS = 4500; // ElevenLabs hard limit is 5000; leave headroom
+  const TTS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb'; // "Aria" multilingual default
+
+  const stripMarkdown = (s: string): string =>
+    s
+      .replace(/```[\s\S]*?```/g, ' ')                 // fenced code
+      .replace(/`([^`]+)`/g, '$1')                       // inline code
+      .replace(/!\[[^\]]*]\([^)]+\)/g, ' ')              // images
+      .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')            // links → text
+      .replace(/^#{1,6}\s+/gm, '')                       // headings
+      .replace(/\*\*([^*]+)\*\*/g, '$1')                 // bold
+      .replace(/\*([^*]+)\*/g, '$1')                     // italic / list bullet
+      .replace(/__([^_]+)__/g, '$1')                     // bold underscore
+      .replace(/_([^_]+)_/g, '$1')                       // italic underscore
+      .replace(/^[-*+]\s+/gm, '')                        // list bullets
+      .replace(/^\d+\.\s+/gm, '')                        // ordered list
+      .replace(/^>\s?/gm, '')                            // blockquote
+      .replace(/\|/g, ' ')                                // table pipes
+      .replace(/\n{3,}/g, '\n\n')                        // collapse blanks
+      .replace(/\s{2,}/g, ' ')                            // collapse spaces
+      .trim();
+
+  const ttsInFlight = new Map<string, Promise<Buffer>>(); // de-dupe concurrent requests for same text
+
+  app.post('/api/tts', async (req, res) => {
+    const { text, language } = req.body || {};
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text (string) required' });
+    }
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return res.status(503).json({ error: 'ELEVENLABS_API_KEY not configured' });
+    }
+
+    const cleanText = stripMarkdown(text);
+    if (!cleanText) {
+      return res.status(400).json({ error: 'text is empty after markdown strip' });
+    }
+    const truncated = cleanText.length > TTS_MAX_CHARS
+      ? cleanText.slice(0, TTS_MAX_CHARS).replace(/\s+\S*$/, '') + '…'
+      : cleanText;
+
+    const langCode = (['en', 'si', 'ta'].includes(language) ? language : 'en') as 'en' | 'si' | 'ta';
+    // Cache key: same text+lang returns same audio (deterministic, idempotent)
+    const cacheKey = `${langCode}:${truncated}`;
+
+    try {
+      // De-dupe: if another request is already generating this audio, await it
+      let audioPromise = ttsInFlight.get(cacheKey);
+      if (!audioPromise) {
+        audioPromise = (async () => {
+          const r = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/${TTS_VOICE_ID}?output_format=mp3_44100_128`,
+            {
+              method: 'POST',
+              headers: {
+                'xi-api-key': process.env.ELEVENLABS_API_KEY!,
+                'Content-Type': 'application/json',
+                'Accept': 'audio/mpeg',
+              },
+              body: JSON.stringify({
+                text: truncated,
+                model_id: 'eleven_multilingual_v2',
+                voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 },
+                language_code: langCode,
+              }),
+            }
+          );
+          if (!r.ok) {
+            const errBody = await r.text();
+            throw new Error(`ElevenLabs ${r.status}: ${errBody.slice(0, 200)}`);
+          }
+          const ab = await r.arrayBuffer();
+          return Buffer.from(ab);
+        })();
+        ttsInFlight.set(cacheKey, audioPromise);
+        // Clean up after completion (no need to keep dedup map huge)
+        audioPromise.finally(() => ttsInFlight.delete(cacheKey));
+      }
+
+      const audio = await audioPromise;
+      res.set('Content-Type', 'audio/mpeg');
+      res.set('Content-Length', audio.length.toString());
+      res.set('Cache-Control', 'public, max-age=86400'); // browser + CDN can cache
+      res.set('X-TTS-Chars', truncated.length.toString());
+      res.send(audio);
+    } catch (err: any) {
+      console.error('[TTS] failed:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Static / Vite Middleware ─────────────────────────────────────────────────
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

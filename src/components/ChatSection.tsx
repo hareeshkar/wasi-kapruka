@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Message, Product, City, Order } from '../types';
 import { Send, MapPin, CheckCircle2, Ticket, Sparkles } from 'lucide-react';
 import ProductCard from './ProductCard';
+import AudioPlayer from './AudioPlayer';
 
 interface ChatSectionProps {
   messages: Message[];
@@ -25,6 +26,13 @@ const PLACEHOLDER = {
   en: 'Ask Wasi for cakes, roses, hampers, tracking…',
   si: 'සිංහල හෝ English — වාසිගෙන් ඕනෑ දේ අහන්න…',
   ta: 'தமிழில் அல்லது English — வாசியிடம் கேளுங்கள்…',
+};
+
+// Progress messages look like `*Searching for cakes…*` (single italic line).
+// We don't want TTS to read out asterisks for those ephemeral status pings.
+const isProgressMessage = (content: string): boolean => {
+  const c = content.trim();
+  return c.startsWith('*') && c.endsWith('*') && !c.slice(1, -1).includes('*');
 };
 
 export default function ChatSection({
@@ -128,8 +136,13 @@ export default function ChatSection({
                 )}
               </div>
 
-              {/* Timestamp */}
-              <span className="text-[9px] font-mono text-gray-400 px-1">{msg.timestamp}</span>
+              {/* Timestamp + audio (assistant only — skip progress-style *…* italics) */}
+              <div className={`flex items-center gap-2 px-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                <span className="text-[9px] font-mono text-gray-400">{msg.timestamp}</span>
+                {!isUser && !isProgressMessage(msg.content) && (
+                  <AudioPlayer text={msg.content} language={lang} cacheKey={msg.id} />
+                )}
+              </div>
 
               {/* Product carousel — only show during initial discovery (cart empty) or when user explicitly asked */}
               {cartSize === 0 && msg.products && msg.products.length > 0 && !msg.content.includes('Added to bundle') && (
