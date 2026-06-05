@@ -66,13 +66,22 @@ async function mcpHandshake() {
 async function mcpCall(toolName, toolParams) {
   if (!sessionId) await mcpHandshake();
   let lastErr = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Exponential backoff on 429: 4s, 8s, 16s, 32s, 64s (cap at 64s).
+  // Kapruka's rate-limit window can exceed 30 seconds during heavy burst traffic;
+  // a fixed 3-second sleep never recovers. 5 attempts × exp-backoff = ~2min ceiling.
+  for (let attempt = 0; attempt < 5; attempt++) {
     const res = await fetch(MCP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'mcp-session-id': sessionId, 'User-Agent': 'Mozilla/5.0 WasiProdTest/3.0' },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', params: { name: toolName, arguments: { params: toolParams } }, id: Math.floor(Math.random() * 9000 + 1000) })
     });
-    if (res.status === 429) { lastErr = new Error('Rate limited'); await sleep(3000); continue; }
+    if (res.status === 429) {
+      lastErr = new Error('Rate limited');
+      const backoff = Math.min(4000 * Math.pow(2, attempt), 64000);
+      console.log(`  [429] backing off ${backoff}ms (attempt ${attempt + 1}/5)`);
+      await sleep(backoff);
+      continue;
+    }
     if (!res.ok) { lastErr = new Error(`HTTP ${res.status}`); await sleep(1000); continue; }
     const text = await res.text();
     let payload;
@@ -84,7 +93,12 @@ async function mcpCall(toolName, toolParams) {
     }
     if (payload.error) {
       lastErr = new Error(payload.error.message);
-      if (lastErr.message.includes('Rate limit')) { await sleep(3000); continue; }
+      if (lastErr.message.includes('Rate limit')) {
+        const backoff = Math.min(4000 * Math.pow(2, attempt), 64000);
+        console.log(`  [rate limit] backing off ${backoff}ms (attempt ${attempt + 1}/5)`);
+        await sleep(backoff);
+        continue;
+      }
       throw lastErr;
     }
     const textBlock = payload.result?.content?.find(c => c.type === 'text')?.text;
