@@ -30,6 +30,14 @@ enthusiasm. You speak the user's language — Sinhala, Tamil, Tanglish, or Engli
 You never pad replies, never repeat what you just did, and never describe what the UI
 already shows visually. Every reply moves the user ONE step closer to sending their gift.
 
+PERSONALIZATION (HARD RULE — see SESSION CONTEXT for the user's profile):
+  - If a User profile is provided, your first reply MUST address the user by their first name.
+  - If Tone is specified in the profile, match it: casual for Gen Z, friendly-professional for Millennials,
+    warm-formal for Gen X, respectful-clear for Boomers.
+  - NEVER ask the user for information already in their profile (name, city, age, typical recipient).
+  - If their typical_recipient is "self", you can recommend items the user would buy for themselves
+    (groceries, electronics, daily essentials) — not just gifts.
+
 Occasions: Birthday, Anniversary, Avurudu (New Year), Mother's Day, Father's Day,
 Valentine's, Graduation, Thank You, Wedding, Christmas, Diwali, Childrens Day.
 
@@ -865,21 +873,46 @@ async function startServer() {
     const langLockLine = LANG_LOCK[language as string] ?? LANG_LOCK['en'];
 
     // ── SESSION_CONTEXT (budget, occasion, cart, profile) ──────────────────────
+    // PERSONALIZATION RULES go FIRST so the LLM weights them highest. LLMs follow
+    // explicit "DO this" instructions more reliably than "consider using" hints.
+    const personalizationRules: string[] = [];
+    if (owner_id) {
+      personalizationRules.push(
+        'PERSONALIZATION RULES (HARD — do not skip):',
+        '- In your FIRST reply, greet the user by their first name. NEVER open with a generic greeting.',
+        '- DO NOT re-ask for information already in the User profile (name, city, age, typical recipient, language).',
+        '- Use the Tone field to match their generation — DO NOT default to one register for everyone.',
+        '- If typical_recipient is set, your first question can be about the occasion/date, not "who is this for".',
+      );
+    }
+
     const sessionContext = [
+      ...personalizationRules,
       'SESSION CONTEXT (authoritative — do not re-ask):',
       occasion ? `- Occasion: ${occasion} — prioritised search terms: ${OCCASION_HINTS[occasion] ?? 'chocolate'}` : '',
       budget > 0 ? `- Budget: Rs.${Number(budget).toLocaleString()} LKR — ALWAYS pass max_price=${budget}` : '',
       `- Cart:\n${cartSummary}`,
       lastCartAction ? `- Recent cart action: ${lastCartAction}` : '',
       cartLines.length > 0 ? '- Do NOT recommend items already in cart unless asked.' : '',
-      // Personalized profile — only included when the user has signed up and the
-      // client has loaded their profile. Empty strings are filtered out.
-      owner_id ? '- Authenticated user — use their name in greetings; never re-ask their city, age, or typical recipient.' : '',
       profile ? `- User profile: ${profile}` : '',
     ].filter(Boolean).join('\n');
 
-    // Language lock is PREPENDED so it takes highest priority over the persona
-    const effectivePrompt = `${langLockLine}\n\n${WASI_SYSTEM_PROMPT}\n\n${sessionContext}`;
+    // Personalization rules + language lock go BEFORE the system prompt so the
+    // LLM weights them highest. Per the discussion, we want the LLM to use
+    // the user's name and profile PROACTIVELY, not wait for it to be mentioned
+    // in conversation.
+    const prefix = [
+      langLockLine,
+      ...(owner_id ? [
+        'PERSONALIZATION RULES (HIGHEST PRIORITY — read first):',
+        profile ? `- User profile: ${profile}` : '- User is signed in but no profile data yet.',
+        '- Your FIRST reply MUST greet the user by their first name.',
+        '- DO NOT re-ask for any field already in the profile (name, city, age, typical_recipient, language).',
+        '- Match the Tone field in the profile when choosing register/slang/emoji usage.',
+      ] : []),
+    ].join('\n\n');
+
+    const effectivePrompt = `${prefix}\n\n${WASI_SYSTEM_PROMPT}\n\n${sessionContext}`;
 
     try {
       const formattedHistory = (history || []).map((h: any) => ({

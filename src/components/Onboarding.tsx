@@ -42,6 +42,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
       cta: 'Consult Wasi Now →',
       demo: 'Guided Demo (90-sec)',
       saveCta: 'Sign in to save this gift history',
+      saveHint: 'You can add city, birthday and other details later from the user menu.',
     },
     si: {
       badge: 'කපෘක විශේෂ නියෝජිතයා',
@@ -53,6 +54,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
       cta: 'වාසි සමඟ ආරම්භ කරන්න →',
       demo: '90-තත්පර සංදර්ශනය',
       saveCta: 'මෙම තෑගි ඉතිහාසය සුරැකීමට පිවිසෙන්න',
+      saveHint: 'නගරය, උපන් දිනය සහ අනෙකුත් විස්තර පසුව පරිශීලක මෙනුවෙන් එකතු කළ හැක.',
     },
     ta: {
       badge: 'கப்ருகா சிறப்பு முகவர்',
@@ -64,6 +66,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
       cta: 'வாசியுடன் தொடங்கவும் →',
       demo: '90-வினாடி சுற்று',
       saveCta: 'இந்த பரிசு வரலாற்றை சேமிக்க உள்நுழையவும்',
+      saveHint: 'நகரம், பிறந்தநாள் மற்றும் பிற விவரங்களை பின்னர் பயனர் மெனுவில் சேர்க்கலாம்.',
     },
   };
   const c = copy[language];
@@ -215,6 +218,9 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
                 <ShieldCheck className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                 {c.saveCta}
               </button>
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                {c.saveHint}
+              </p>
             </div>
           )}
         </div>

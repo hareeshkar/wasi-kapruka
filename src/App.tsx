@@ -57,15 +57,10 @@ export default function App() {
     migrateGuestDataToUser(user.id).catch(err => console.error('[auth migration]', err));
   }, [user?.id]);
 
-  // Trigger progressive profile prompt after first chat turn (if essentials missing)
-  useEffect(() => {
-    if (!user || !profile) return;
-    if (profile.profile_complete) return;
-    if (messages.length < 1) return;
-    // Defer so the chat has had time to render first
-    const t = setTimeout(() => setProfilePromptOpen(true), 4000);
-    return () => clearTimeout(t);
-  }, [user?.id, profile?.profile_complete, messages.length]);
+  // NOTE: ProgressiveProfilePrompt is NO LONGER auto-triggered.
+  // Respecting user intent: the user already provided DOB + language at signup.
+  // Re-asking for the same info via a pop-up is intrusive. The prompt is now
+  // opened explicitly via "Complete my profile" in the UserMenu (UserMenu.tsx).
 
   // Auto-set onboarded=true when Supabase returns messages or cart (existing behavior)
   useEffect(() => {
@@ -161,28 +156,18 @@ export default function App() {
       occasion: params.occasion,
     }));
 
-    // Bootstrap initial welcoming prompt
-    const welcomeMsg: Message = {
-      id: 'welcome',
-      role: 'assistant',
-      content: params.language === 'si'
-        ? `ආයුබෝවන්! 🌿 මම වාසි, ඔබේ කපෘක තෑගි උපදෙස්කරු. ඔබ ඔබේ ${params.occasion} අවස්ථාව වෙනුවෙන් රු. ${params.budget.toLocaleString()} ක උපරිමයකින් තෑග්ගක් සොයන බව මට වැටහුණා. මම ඒ සඳහා හොඳම දේවල් සොයාදෙන්නම්!`
-        : params.language === 'ta'
-        ? `வணக்கம்! 🌿 நான் வாசி, உங்கள் கப்ருகா பரிசுத் துணைவன். உங்களின் ${params.occasion} நிகழ்விற்காக ரூ. ${params.budget.toLocaleString()} பட்ஜெட்டில் சரியான பரிசைத் தேடத் தொடங்குகிறேன்!`
-        : `Aney cardially welcome! 🌿 I am Wasi, your Kapruka gift concierge. I see we are planning a special ${params.occasion} surprise with a budget constraint of Rs. ${params.budget.toLocaleString()} LKR. Let me pull up some of Kapruka's bestselling ideas for you!`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
+    // No more hardcoded client-side welcome. The LLM will greet the user itself,
+    // using the profile (name, age, tone) passed via SESSION_CONTEXT.
+    // This way the welcome is always personalized.
     await clearMessages();
-    void addMessage(welcomeMsg);
-
     setIsStreaming(true);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `Find a gift for ${params.occasion}, budget Rs.${params.budget} LKR. Greet warmly, show 2–4 relevant products under Rs.${params.budget}, then ask who the recipient is and their Sri Lankan city.`,
+          message: `[ONBOARDING JUST COMPLETED] The user just picked: occasion=${params.occasion}, budget=Rs.${params.budget}, language=${params.language}. Greet them by their first name (from User profile) and open their first gift journey. If their profile has a typical_recipient, you can suggest something appropriate for that audience without re-asking. Show 2–4 relevant products under the budget.`,
           history: [],
           language: params.language,
           budget: params.budget,
@@ -851,7 +836,10 @@ export default function App() {
             {/* Auth — Sign in button (guest) or UserMenu (authed) */}
             {!authLoading && (
               user ? (
-                <UserMenu lang={language} />
+                <UserMenu
+                  lang={language}
+                  onOpenProfilePrompt={() => setProfilePromptOpen(true)}
+                />
               ) : (
                 <button
                   onClick={() => setSignInOpen(true)}

@@ -1,23 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, User as UserIcon, ChevronDown, Sparkles } from 'lucide-react';
+import { LogOut, User as UserIcon, ChevronDown, Sparkles, Edit3 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useUserProfile } from '../hooks/useUserProfile';
 
 interface UserMenuProps {
   lang?: 'en' | 'si' | 'ta';
+  // When set, renders a "Complete my profile" item that calls this with a no-op arg
+  onOpenProfilePrompt?: () => void;
 }
 
 const COPY = {
-  greeting: { en: 'Hi, ',          si: 'ආයුබෝවන්, ',     ta: 'வணக்கம், ' },
-  signOut:  { en: 'Sign out',       si: 'ඉවත් වන්න',       ta: 'வெளியேறு' },
-  profile:  { en: 'Your profile',   si: 'ඔබේ පැතිකඩ',     ta: 'உங்கள் சுயவிவரம்' },
-  notSet:   { en: 'Add your name',  si: 'ඔබේ නම එකතු කරන්න', ta: 'உங்கள் பெயரைச் சேர்க்கவும்' },
+  greeting:    { en: 'Hi, ',          si: 'ආයුබෝවන්, ',     ta: 'வணக்கம், ' },
+  signOut:     { en: 'Sign out',       si: 'ඉවත් වන්න',       ta: 'வெளியேறு' },
+  profile:     { en: 'Your profile',   si: 'ඔබේ පැතිකඩ',     ta: 'உங்கள் சுயவிவரம்' },
+  notSet:      { en: 'Add your name',  si: 'ඔබේ නම එකතු කරන්න', ta: 'உங்கள் பெயரைச் சேர்க்கவும்' },
+  complete:    { en: 'Complete my profile', si: 'මගේ පැතිකඩ සම්පූර්ණ කරන්න', ta: 'எனது சுயவிவரத்தை நிரப்பவும்' },
+  incomplete:  { en: 'Add city, birthday, recipient', si: 'නගරය, උපන් දිනය, ලබන්නා එකතු කරන්න', ta: 'நகரம், பிறந்தநாள், பெறுநரைச் சேர்க்கவும்' },
 };
 
 const t = (key: keyof typeof COPY, lang: 'en' | 'si' | 'ta' = 'en'): string =>
   COPY[key][lang] ?? COPY[key].en;
 
-export default function UserMenu({ lang = 'en' }: UserMenuProps) {
+export default function UserMenu({ lang = 'en', onOpenProfilePrompt }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const { profile } = useUserProfile(user?.id ?? null);
   const [open, setOpen] = useState(false);
@@ -38,6 +42,10 @@ export default function UserMenu({ lang = 'en' }: UserMenuProps) {
   const initials = firstName
     ? firstName.slice(0, 1).toUpperCase()
     : (user.email || '?').slice(0, 1).toUpperCase();
+
+  // Profile is "incomplete for personalization" if DOB, city, or typical_recipient is missing
+  const profileIsIncomplete =
+    !profile?.date_of_birth || !profile?.city || !profile?.typical_recipient;
 
   return (
     <div className="relative" ref={ref}>
@@ -87,6 +95,29 @@ export default function UserMenu({ lang = 'en' }: UserMenuProps) {
               }
               {profile?.city && <span className="block mt-0.5">📍 {profile.city}</span>}
             </div>
+
+            <div className="border-t border-black/5" />
+
+            {/* Complete my profile — explicit user action, not auto */}
+            {onOpenProfilePrompt && (
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onOpenProfilePrompt();
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#0A5C45] hover:bg-[#E1F5EE] cursor-pointer transition text-left"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <div className="flex flex-col">
+                  <span>{t('complete', lang)}</span>
+                  {profileIsIncomplete && (
+                    <span className="text-[10px] font-normal text-amber-700 mt-0.5">
+                      {t('incomplete', lang)}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )}
 
             <div className="border-t border-black/5" />
 
