@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { callMcpTool } from './src/lib/mcp.js';
+import { createClient } from '@supabase/supabase-js';
 import {
   createLLMAdapter,
   KAPRUKA_TOOL_DECLARATIONS,
@@ -554,6 +555,11 @@ async function startServer() {
   const llmAdapter = await buildLLMAdapter();
   console.log(`[LLM] Provider: ${llmAdapter.provider} | Model: ${llmAdapter.model}`);
 
+  const supabase =
+    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
+      ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+      : null;
+
   // ── DEMO MODE DISABLED — always live MCP ────────────────────────────────────
   // Demo/simulator path is commented out. The simulator in mcp.ts still activates
   // automatically if live MCP returns an HTTP error after 2 retries (safety net only).
@@ -662,6 +668,28 @@ async function startServer() {
     try {
       const demoMode = getMcpMode(req);
       const body = req.body;
+      const bodyItems = Array.isArray(body.items) ? body.items : [];
+      let resolvedItems = bodyItems;
+
+      if (supabase && body.session_id) {
+        const { data, error } = await supabase
+          .from('cart_items')
+          .select('*')
+          .eq('session_id', body.session_id);
+        if (error) {
+          console.error('[supabase order] cart load failed', error.message);
+        } else if (data && data.length > 0) {
+          const icingLookup = new Map<string, string>();
+          for (const item of bodyItems) {
+            const code = item.product_code || item.product_id;
+            if (code && item.icing_text) icingLookup.set(code, item.icing_text);
+          }
+          resolvedItems = data.map((item: any) => ({
+            ...item,
+            icing_text: icingLookup.get(item.product_code) || item.icing_text,
+          }));
+        }
+      }
 
       // Build the canonical nested MCP schema from either shape:
       //   A) Flat (from CartDrawer form):  { items/product_code, recipient_name, city, delivery_date, address, ... }
@@ -670,10 +698,17 @@ async function startServer() {
 
       if (body.cart && body.recipient && body.delivery) {
         // Shape B — LLM already built the correct schema, pass through
-        mcpPayload = body;
+        const cartItems = resolvedItems.length > 0
+          ? resolvedItems.map((i: any) => ({
+            product_id: i.product_id || i.product_code,
+            quantity:   i.quantity   ?? 1,
+            ...(i.icing_text ? { icing_text: i.icing_text } : {}),
+          }))
+          : body.cart;
+        mcpPayload = { ...body, cart: cartItems };
       } else {
         // Shape A — flat form payload; transform to nested MCP schema
-        const cartItems = (body.items || []).map((i: any) => ({
+        const cartItems = resolvedItems.map((i: any) => ({
           product_id: i.product_id || i.product_code,
           quantity:   i.quantity   ?? 1,
           ...(i.icing_text ? { icing_text: i.icing_text } : {}),
@@ -703,7 +738,7 @@ async function startServer() {
       // Live MCP returns summary.grand_total as the authoritative total.
       const summary      = raw?.summary ?? {};
       // Fallback: compute items_total from request body if MCP returned 0 (unrecognized products)
-      const requestItems = body?.items || [];
+      const requestItems = resolvedItems.length > 0 ? resolvedItems : bodyItems;
       const cartSubtotal = requestItems.reduce((sum: number, item: any) => sum + (item.price_lkr || 0) * (item.quantity || 1), 0);
       const computedItemsTotal = (summary.items_total > 0) ? summary.items_total :
         cartSubtotal;
@@ -754,7 +789,18 @@ async function startServer() {
 
   // ── Chat Endpoint ────────────────────────────────────────────────────────────
   app.post('/api/chat', async (req, res) => {
-    const { message, history, language, budget, occasion, cart, lastCartAction, formState } = req.body;
+    const {
+      message,
+      history,
+      language,
+      budget,
+      occasion,
+      cart,
+      lastCartAction,
+      formState,
+      session_id,
+      persist = true,
+    } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -856,6 +902,14 @@ async function startServer() {
           return await callMcpTool(toolCall.name, toolCall.args, false); // always live
         },
       );
+
+      if (supabase && persist && session_id) {
+        const { error } = await supabase.from('messages').insert([
+          { session_id, role: 'user', content: message },
+          { session_id, role: 'assistant', content: reply, tool_calls: toolCalls ?? null },
+        ]);
+        if (error) console.error('[supabase chat] insert failed', error.message);
+      }
 
       res.json({ success: true, reply, toolCalls });
     } catch (err: any) {

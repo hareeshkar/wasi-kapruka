@@ -42,6 +42,10 @@ const toMessage = (row: SupabaseMessageRow): Message => ({
   order_intent: row.metadata?.order_intent,
 });
 
+type AddMessageOptions = {
+  persist?: boolean;
+};
+
 export function useSupabaseChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +62,7 @@ export function useSupabaseChat() {
         if (error) console.error('[supabase chat] load failed', error.message);
         if (active) {
           const rows = (data as SupabaseMessageRow[]) || [];
-          setMessages(rows.map(toMessage));
+          setMessages(rows.filter(row => row.role === 'user' || row.role === 'assistant').map(toMessage));
           setLoading(false);
         }
       });
@@ -67,8 +71,9 @@ export function useSupabaseChat() {
     };
   }, [sessionId]);
 
-  const addMessage = useCallback(async (msg: Message) => {
+  const addMessage = useCallback(async (msg: Message, options: AddMessageOptions = {}) => {
     setMessages(prev => [...prev, msg]);
+    if (options.persist === false) return;
     const { error } = await supabase.from('messages').insert({
       session_id: sessionId,
       role: msg.role,

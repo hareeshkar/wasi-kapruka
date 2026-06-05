@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, CartItem, Product, Order, City, DeliveryCheckResult, OrderIntent } from './types';
+import { Message, Product, Order, City, OrderIntent } from './types';
 import Onboarding from './components/Onboarding';
 import ChatSection from './components/ChatSection';
 import CartDrawer from './components/CartDrawer';
+import { useSupabaseCart } from './hooks/useSupabaseCart';
+import { useSupabaseChat } from './hooks/useSupabaseChat';
 
 export default function App() {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [language, setLanguage] = useState<'en' | 'si' | 'ta'>('en');
   const [budget, setBudget] = useState<number>(0);
   const [occasion, setOccasion] = useState<string>('');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cart, loading: cartLoading, addItem, removeItem, updateQty, clearCart } = useSupabaseCart();
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderResult, setOrderResult] = useState<Order | null>(null);
 
   // Conversational state
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, sessionId } = useSupabaseChat();
   const [isStreaming, setIsStreaming] = useState(false);
 
   // Auto-fill intent extracted from chat (recipient, city, address, phone, message)
@@ -42,6 +44,14 @@ export default function App() {
       } catch {}
     }
   }, []);
+
+  useEffect(() => {
+    if (chatLoading || cartLoading) return;
+    if (messages.length > 0 || cart.length > 0) {
+      setIsOnboarded(true);
+      if (messages.length > 0) discoveryShown.current = true;
+    }
+  }, [chatLoading, cartLoading, messages.length, cart.length]);
 
   useEffect(() => {
     if (discoverLoaded.current) return;
@@ -119,7 +129,8 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setMessages([welcomeMsg]);
+    await clearMessages();
+    void addMessage(welcomeMsg);
 
     setIsStreaming(true);
     try {
@@ -132,6 +143,8 @@ export default function App() {
           language: params.language,
           budget: params.budget,
           occasion: params.occasion,
+          session_id: sessionId,
+          persist: false,
           cart: [],
         })
       });
@@ -203,12 +216,12 @@ export default function App() {
               if (order) orderCreated = order;
             }
             if (tc.toolName === 'wasi_show_progress' && tc.result) {
-              setMessages(prev => [...prev, {
+              void addMessage({
                 id: `progress-${Date.now()}-${tc.result.step}`,
                 role: 'assistant',
                 content: `*${tc.result.message}*`,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              }]);
+              });
             }
           }
         }
@@ -227,7 +240,7 @@ export default function App() {
           order_created: orderCreated,
           order_intent: data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result
         };
-        setMessages(prev => [...prev, replyMsg]);
+        void addMessage(replyMsg);
       }
 
       // ── below is handleOnboard catch block
@@ -247,7 +260,7 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    void addMessage(userMsg, { persist: false });
     setIsStreaming(true);
 
     // Capture and clear the cart-action note so it's sent once then forgotten
@@ -268,6 +281,8 @@ export default function App() {
           language,
           budget,
           occasion,
+          session_id: sessionId,
+          persist: true,
           cart: cartForAI(),
           lastCartAction: lastCartAction || undefined,
           // Pass current form state so wasi_get_form_state (V5) can return field-level status
@@ -355,12 +370,12 @@ export default function App() {
               handleUpdateQty(tc.result.product_id, tc.result.quantity ?? 1);
             }
             if (tc.toolName === 'wasi_show_progress' && tc.result) {
-              setMessages(prev => [...prev, {
+              void addMessage({
                 id: `progress-${Date.now()}-${tc.result.step}`,
                 role: 'assistant' as const,
                 content: `*${tc.result.message}*`,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              }]);
+              });
             }
             if (tc.toolName === 'wasi_order_now') {
               const order = await handleChatOrder(currentPrefill || orderIntent);
@@ -387,7 +402,7 @@ export default function App() {
           tracking_result: trackingData,
           order_intent: data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result
         };
-        setMessages(prev => [...prev, replyMsg]);
+        void addMessage(replyMsg, { persist: false });
       }
 
       // ── below is the handleSendMessage catch (same function)
@@ -401,29 +416,9 @@ export default function App() {
   // ── Cart operations ────────────────────────────────────────────────────────
   // silent=true when called from the LLM tool loop — the LLM already replied that turn,
   // so we skip the notifyAIProductAdded follow-up call to prevent a double response.
-  const handleAddToCart = (product: Product, variant?: any, silent = false) => {
+  const handleAddToCart = async (product: Product, variant?: any, silent = false) => {
     const price = variant ? variant.price_lkr : product.price_lkr;
-
-    const newItem: CartItem = {
-      product_code: product.product_code,
-      name: product.name,
-      price_lkr: price,
-      image_url: product.image_url,
-      quantity: 1,
-      category: product.category,
-      variant_id: variant?.id,
-      variant_name: variant?.name,
-    };
-
-    setCart(prev => {
-      const existing = prev.find(i => i.product_code.toLowerCase() === product.product_code.toLowerCase());
-      if (existing) {
-        return prev.map(i =>
-          i.product_code.toLowerCase() === product.product_code.toLowerCase() ? { ...i, quantity: i.quantity + 1 } : i
-        );
-      }
-      return [...prev, newItem];
-    });
+    await addItem(product, variant);
 
     // Only fire a follow-up AI chat when the user clicked the card button.
     // When the LLM called wasi_add_to_cart (silent=true), it already replied — skip.
@@ -445,7 +440,7 @@ export default function App() {
       content: `Added to bundle: "${product.name}"${variantNote} — Rs.${price.toLocaleString()} LKR`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-    setMessages(prev => [...prev, addedMsg]);
+    void addMessage(addedMsg);
     setIsStreaming(true);
 
     // Build updated cart snapshot for context (cart state may not have flushed yet)
@@ -478,18 +473,20 @@ export default function App() {
           language,
           budget,
           occasion,
+          session_id: sessionId,
+          persist: false,
           cart: cartSnapshot,
           lastCartAction: `Just added: ${product.name} (Rs.${price.toLocaleString()})`,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessages(prev => [...prev, {
+        void addMessage({
           id: `bundle-reply-${Date.now()}`,
           role: 'assistant',
           content: data.reply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
+        });
       }
     } catch (err) {
       console.error('[bundle notify]', err);
@@ -498,21 +495,19 @@ export default function App() {
     }
   };
 
-  const handleUpdateQty = (code: string, qty: number) => {
+  const handleUpdateQty = async (code: string, qty: number) => {
     if (qty <= 0) { handleRemoveItem(code); return; }
-    setCart(prev => prev.map(item =>
-      item.product_code.toLowerCase() === code.toLowerCase() ? { ...item, quantity: qty } : item
-    ));
+    await updateQty(code, qty);
   };
 
-  const handleRemoveItem = (code: string) => {
+  const handleRemoveItem = async (code: string) => {
     const item = cart.find(i => i.product_code.toLowerCase() === code.toLowerCase());
     if (item) lastCartActionRef.current = `Removed "${item.name}" from cart`;
-    setCart(prev => prev.filter(item => item.product_code !== code));
+    await removeItem(code);
   };
 
-  const handleClearCart = () => {
-    setCart([]);
+  const handleClearCart = async () => {
+    await clearCart();
     setOrderResult(null);
   };
 
@@ -534,6 +529,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          session_id: sessionId,
           items: cart.map(i => ({
             product_code: i.product_code,
             variant_id: i.variant_id,
@@ -565,7 +561,7 @@ export default function App() {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           order_created: data.order
         };
-        setMessages(prev => [...prev, orderMsg]);
+        void addMessage(orderMsg);
       }
     } catch (err) {
       console.error(err);
@@ -586,6 +582,7 @@ export default function App() {
           'x-mcp-mode': 'live'
         },
         body: JSON.stringify({
+          session_id: sessionId,
           items: cart.map(i => ({
             product_code: i.product_code,
             price_lkr: i.price_lkr,
@@ -624,6 +621,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          session_id: sessionId,
           items: cart.map(i => ({
             product_code: i.product_code,
             variant_id: i.variant_id,
@@ -699,7 +697,7 @@ export default function App() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ];
-    setMessages(currentMsgList);
+    void replaceMessages(currentMsgList);
 
     let currentStep = 0;
     const runNextDemoStep = () => {
@@ -718,7 +716,7 @@ export default function App() {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         currentMsgList = [...currentMsgList, userMsg];
-        setMessages(currentMsgList);
+        void replaceMessages(currentMsgList);
         setIsStreaming(true);
 
         // Assistant reply
@@ -751,7 +749,7 @@ export default function App() {
           }
 
           currentMsgList = [...currentMsgList, assistantMsg];
-          setMessages(currentMsgList);
+          void replaceMessages(currentMsgList);
 
           currentStep++;
           runNextDemoStep();
@@ -769,7 +767,7 @@ export default function App() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <header className="px-6 py-3 border-b border-black/5 bg-white/85 backdrop-blur-md shadow-sm sticky top-0 z-30 select-none">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setIsOnboarded(false); setMessages([]); }}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setIsOnboarded(false); void clearMessages(); }}>
             <div className="w-9 h-9 bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] rounded-xl flex items-center justify-center text-white font-display font-bold text-base shadow-md shadow-[#0F6E56]/20">
               W
             </div>
@@ -802,7 +800,7 @@ export default function App() {
 
             {isOnboarded && (
               <button
-                onClick={() => { setIsOnboarded(false); setMessages([]); setCart([]); setOrderResult(null); }}
+                onClick={() => { setIsOnboarded(false); void clearMessages(); void clearCart(); setOrderResult(null); }}
                 className="text-[11px] font-semibold text-[#6B6B6B] hover:text-[#1A1A1A] border border-black/8 px-3 py-1.5 rounded-full bg-white cursor-pointer active:scale-95 transition-all shadow-xs"
               >
                 New Gift
