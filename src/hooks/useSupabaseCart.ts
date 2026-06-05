@@ -92,24 +92,38 @@ export function useSupabaseCart({ ownerId }: UseSupabaseCartOpts) {
       row.session_id = sessionId;
     }
 
-    // Upsert: on (session_id, product_code) when guest, on (owner_id, product_code) when authed
-    // Supabase requires a unique constraint matching onConflict. We have UNIQUE(session_id, product_code)
-    // for the guest path. For auth, we fall back to a non-onConflict upsert keyed by client-side selection.
+    // Upsert: on (session_id, product_code) when guest, on (owner_id, product_code) when authed.
+    //
+    // Auth path note: we can't use a plain onConflict upsert here because the
+    // unique constraint is on (session_id, product_code) — but for authed users
+    // the dedup key is (owner_id, product_code). So we do a SELECT-then-INSERT-or-UPDATE:
+    //   1. SELECT by (owner_id, product_code)
+    //   2. if exists: UPDATE
+    //   3. if missing: INSERT
+    // The previous version tried UPDATE first and only inserted on updateErr — but
+    // an UPDATE that matches 0 rows returns NO error, so the INSERT never fired
+    // and cart_items stayed empty for authed users.
     let error: any = null;
     if (ownerId) {
-      // Auth: update by (owner_id, product_code), insert if missing
-      const { error: updateErr } = await supabase
+      const { data: existing } = await supabase
         .from('cart_items')
-        .update({
-          quantity: itemToPersist.quantity,
-          price_lkr: itemToPersist.price_lkr,
-          variant_id: itemToPersist.variant_id,
-          variant_name: itemToPersist.variant_name,
-        })
+        .select('id')
         .eq('owner_id', ownerId)
-        .eq('product_code', itemToPersist.product_code);
-      if (updateErr) {
-        // No row exists yet → insert
+        .eq('product_code', itemToPersist.product_code)
+        .maybeSingle();
+
+      if (existing) {
+        const { error: updateErr } = await supabase
+          .from('cart_items')
+          .update({
+            quantity: itemToPersist.quantity,
+            price_lkr: itemToPersist.price_lkr,
+            variant_id: itemToPersist.variant_id,
+            variant_name: itemToPersist.variant_name,
+          })
+          .eq('id', existing.id);
+        error = updateErr;
+      } else {
         const { error: insertErr } = await supabase.from('cart_items').insert(row);
         error = insertErr;
       }
