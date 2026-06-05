@@ -67,6 +67,28 @@ export function missingOptionalFields(p: UserProfile | null): OptionalProfileFie
   return missing;
 }
 
+// Age + life-stage helper — used by profileToContext to give the LLM a
+// register/tone guide so it can match the user's age (your point: "talk like
+// the same age user"). Generations follow the Gen Z / Millennial / Gen X /
+// Boomer convention used in marketing.
+export function computeAge(dob: string | undefined | null): number | null {
+  if (!dob) return null;
+  const ms = Date.now() - new Date(dob).getTime();
+  if (ms < 0) return null;
+  return Math.floor(ms / (365.25 * 24 * 3600 * 1000));
+}
+
+export function lifeStageForAge(age: number | null): string {
+  if (age == null) return '';
+  if (age < 13)  return 'child';
+  if (age < 20)  return 'teen / student';
+  if (age < 28)  return 'Gen Z — early career / university';
+  if (age < 43)  return 'Millennial — mid-career / young family';
+  if (age < 59)  return 'Gen X — established career / family';
+  if (age < 75)  return 'Boomer — pre-retirement or retired';
+  return 'senior';
+}
+
 // Compact text summary used by the LLM in the SESSION_CONTEXT block.
 export function profileToContext(p: UserProfile | null): string {
   if (!p) return 'No profile yet (anonymous guest).';
@@ -75,8 +97,15 @@ export function profileToContext(p: UserProfile | null): string {
   if (name) parts.push(`Name: ${name}`);
   if (p.preferred_language) parts.push(`Language: ${p.preferred_language}`);
   if (p.date_of_birth) {
-    const age = Math.floor((Date.now() - new Date(p.date_of_birth).getTime()) / (365.25 * 24 * 3600 * 1000));
-    parts.push(`Age: ${age} (DOB ${p.date_of_birth})`);
+    const age = computeAge(p.date_of_birth);
+    if (age != null) {
+      parts.push(`Age: ${age} (life stage: ${lifeStageForAge(age)})`);
+      // Age-appropriate tone guide for the LLM
+      parts.push(`Tone: ${age < 28 ? 'casual, internet-fluent, emojis welcome'
+                          : age < 43 ? 'friendly, modern but not overly casual'
+                          : age < 59 ? 'warm, professional, occasional emoji'
+                          : 'respectful, clear, no slang'}`);
+    }
   }
   if (p.gender) parts.push(`Gender: ${p.gender}`);
   if (p.city) parts.push(`City: ${p.city}`);

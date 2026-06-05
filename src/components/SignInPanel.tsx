@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Lock, Sparkles, Loader2, CheckCircle2, ArrowLeft, KeyRound, User, Globe2 } from 'lucide-react';
+import { X, Mail, Lock, Sparkles, Loader2, CheckCircle2, ArrowLeft, KeyRound, User, Globe2, Cake, HelpCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { updateProfile } from '../lib/user-profile';
 
@@ -38,6 +38,12 @@ const COPY = {
   englishLabel:   { en: 'English',                si: 'ඉංග්‍රීසි',          ta: 'ஆங்கிலம்' },
   sinhalaLabel:   { en: 'Sinhala',                si: 'සිංහල',             ta: 'சிங்களம்' },
   tamilLabel:     { en: 'Tamil',                  si: 'දෙමළ',              ta: 'தமிழ்' },
+  dobLabel:       { en: 'Date of birth (optional)', si: 'උපන් දිනය (අමතර)', ta: 'பிறந்த தேதி (விருப்பம்)' },
+  dobPh:          { en: 'Month / Day / Year',     si: 'මාසය / දිනය / වසර',  ta: 'மாதம் / நாள் / ஆண்டு' },
+  dobWhy:         { en: 'Why we ask',             si: 'අපි ඇහුවේ ඇයි',     ta: 'ஏன் கேட்கிறோம்' },
+  dobWhyBody:     { en: 'Your age helps Wasi suggest gifts that match your life stage — university, mid-career, retirement, etc. We never share this with anyone.',
+                     si: 'ඔබේ වයස ඔබේ ජීවන අදියරයට ගැළපෙන තෑගි යෝජනා කිරීමට වාසිට උදව් කරයි — විශ්ව විද්‍යාලය, මධ්‍ය රැකියා, විශ්‍රාම ආදිය. අපි මෙය කිසිවෙකු සමඟ බෙදා නොගනිමු.',
+                     ta: 'உங்கள் வாழ்க்கை நிலைக்கு ஏற்ற பரிசுகளை பரிந்துரைக்க உங்கள் வயது வாசிக்கு உதவுகிறது — பல்கலைக்கழகம், நடுத்தர தொழில், ஓய்வு போன்றவை. இதை யாருடனும் பகிர்ந்து கொள்ள மாட்டோம்.' },
 };
 
 const t = (key: keyof typeof COPY, lang: 'en' | 'si' | 'ta' = 'en'): string =>
@@ -50,15 +56,18 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
   const [lastName, setLastName]   = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [preferredLang, setPreferredLang] = useState<'en' | 'si' | 'ta'>(lang);
+  const [showDobWhy, setShowDobWhy] = useState(false);
   const [status, setStatus]     = useState<Status>('idle');
   const [message, setMessage]   = useState<string>('');
 
   if (!open) return null;
 
   const reset = () => {
-    setFirstName(''); setLastName(''); setEmail(''); setPassword('');
+    setFirstName(''); setLastName(''); setEmail(''); setPassword(''); setDateOfBirth('');
     setPreferredLang(lang);
+    setShowDobWhy(false);
     setStatus('idle'); setMessage('');
   };
 
@@ -94,6 +103,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
             first_name: firstName.trim() || undefined,
             last_name:  lastName.trim()  || undefined,
             email:      email.trim(),
+            date_of_birth: dateOfBirth || undefined,
             preferred_language: preferredLang,
             // Mark complete only if essentials are filled
             profile_complete: !!(firstName.trim() && preferredLang),
@@ -252,6 +262,39 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Date of birth — signup only, optional, with "Why we ask" tooltip */}
+          {mode === 'signup' && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-mono font-semibold text-gray-500 uppercase tracking-wider">
+                  <Cake className="w-3 h-3 inline mr-1" />
+                  {t('dobLabel', lang)}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowDobWhy(s => !s)}
+                  className="text-[10px] text-[#0A5C45] hover:text-[#0F6E56] font-semibold cursor-pointer inline-flex items-center gap-0.5"
+                  aria-label={t('dobWhy', lang)}
+                >
+                  <HelpCircle className="w-3 h-3" />
+                  {t('dobWhy', lang)}
+                </button>
+              </div>
+              <input
+                type="date"
+                value={dateOfBirth}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                className="w-full px-4 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+              />
+              {showDobWhy && (
+                <p className="mt-2 text-[11px] text-gray-600 leading-relaxed bg-[#E1F5EE]/60 border border-[#0F6E56]/15 rounded-lg px-3 py-2 animate-fade-in">
+                  {t('dobWhyBody', lang)}
+                </p>
+              )}
             </div>
           )}
 
