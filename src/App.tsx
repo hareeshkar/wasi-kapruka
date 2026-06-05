@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, Product, Order, City, OrderIntent } from './types';
-import { Sparkles } from 'lucide-react';
-import Onboarding from './components/Onboarding';
+import { Sparkles, MessageSquare } from 'lucide-react';
 import ChatSection from './components/ChatSection';
 import CartDrawer from './components/CartDrawer';
 import SignInPanel from './components/SignInPanel';
 import UserMenu from './components/UserMenu';
 import SaveCartBanner from './components/SaveCartBanner';
 import ProgressiveProfilePrompt from './components/ProgressiveProfilePrompt';
+import ConversationSidebar from './components/ConversationSidebar';
+import EmptyStatePlaceholder from './components/EmptyStatePlaceholder';
 import { useSupabaseCart } from './hooks/useSupabaseCart';
 import { useSupabaseChat } from './hooks/useSupabaseChat';
+import { useConversations } from './hooks/useConversations';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile, missingOptionalFields } from './hooks/useUserProfile';
 import { migrateGuestDataToUser } from './lib/auth-migration';
 import { profileToContext } from './lib/user-profile';
 
 export default function App() {
-  const [isOnboarded, setIsOnboarded] = useState(false);
   const [language, setLanguage] = useState<'en' | 'si' | 'ta'>('en');
   const [budget, setBudget] = useState<number>(0);
   const [occasion, setOccasion] = useState<string>('');
@@ -30,13 +31,21 @@ export default function App() {
   const [showSaveBanner, setShowSaveBanner] = useState(false);
   const bannerDismissed = useRef(false);
 
-  // Cart + chat — dual-mode (guest session_id or auth owner_id)
-  const { cart, loading: cartLoading, addItem, removeItem, updateQty, clearCart } = useSupabaseCart({ ownerId });
+  // ── Conversations (sidebar) ─────────────────────────────────────────────────
+  const {
+    conversations, loading: convsLoading, refresh: refreshConvs,
+    create: createConv, remove: removeConv, updateTitle: updateConvTitle,
+    clearAll: clearAllConvs,
+  } = useConversations({ ownerId });
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+
+  // Cart + chat — scoped to active conversation (per-conversation persistence)
+  const { cart, loading: cartLoading, addItem, removeItem, updateQty, clearCart } = useSupabaseCart({ ownerId, conversationId: activeConvId });
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderResult, setOrderResult] = useState<Order | null>(null);
 
   // Conversational state
-  const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, sessionId } = useSupabaseChat({ ownerId });
+  const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, sessionId } = useSupabaseChat({ ownerId, conversationId: activeConvId });
   const [isStreaming, setIsStreaming] = useState(false);
 
   // Auto-fill intent extracted from chat (recipient, city, address, phone, message)
@@ -62,14 +71,21 @@ export default function App() {
   // Re-asking for the same info via a pop-up is intrusive. The prompt is now
   // opened explicitly via "Complete my profile" in the UserMenu (UserMenu.tsx).
 
-  // Auto-set onboarded=true when Supabase returns messages or cart (existing behavior)
+  // When the user signs in for the first time (or page loads), auto-pick the
+  // most recent conversation so they see their chat history.
+  // Only runs once per user-id to avoid overriding their active selection.
+  const initialConvPicked = useRef<string | null>(null);
   useEffect(() => {
-    if (authLoading || chatLoading || cartLoading) return;
-    if (messages.length > 0 || cart.length > 0) {
-      setIsOnboarded(true);
-      if (messages.length > 0) discoveryShown.current = true;
+    if (convsLoading) return;
+    if (initialConvPicked.current === ownerId) return;
+    if (conversations.length > 0 && !activeConvId) {
+      setActiveConvId(conversations[0].id);
+      initialConvPicked.current = ownerId;
+    } else if (conversations.length === 0 && ownerId) {
+      // Mark as picked even if no conversations so we don't loop
+      initialConvPicked.current = ownerId;
     }
-  }, [authLoading, chatLoading, cartLoading, messages.length, cart.length]);
+  }, [convsLoading, conversations, activeConvId, ownerId]);
 
   // Surface the "save cart" banner after first add-to-cart when not signed in
   // (only shown if user hasn't already dismissed it for this session)
@@ -142,146 +158,6 @@ export default function App() {
     category: i.category ?? '',
   }));
 
-  // Onboard starting event
-  const handleOnboard = async (params: { occasion: string; budget: number; language: 'en' | 'si' | 'ta' }) => {
-    setLanguage(params.language);
-    setBudget(params.budget);
-    setOccasion(params.occasion);
-    setIsOnboarded(true);
-
-    // Persist across HMR / page refresh
-    sessionStorage.setItem('wasi_session', JSON.stringify({
-      language: params.language,
-      budget: params.budget,
-      occasion: params.occasion,
-    }));
-
-    // No more hardcoded client-side welcome. The LLM will greet the user itself,
-    // using the profile (name, age, tone) passed via SESSION_CONTEXT.
-    // This way the welcome is always personalized.
-    await clearMessages();
-    setIsStreaming(true);
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `[ONBOARDING JUST COMPLETED] The user just picked: occasion=${params.occasion}, budget=Rs.${params.budget}, language=${params.language}. Greet them by their first name (from User profile) and open their first gift journey. If their profile has a typical_recipient, you can suggest something appropriate for that audience without re-asking. Show 2–4 relevant products under the budget.`,
-          history: [],
-          language: params.language,
-          budget: params.budget,
-          occasion: params.occasion,
-          session_id: sessionId,
-          owner_id: ownerId,
-          persist: false,
-          cart: [],
-          profile: profileToContext(profile),
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        const linkedProducts: Product[] = [];
-        const linkedSeen = new Set<string>();
-        const suggestedCities: City[] = [];
-        let orderCreated: Order | undefined;
-
-        if (data.toolCalls) {
-          for (const tc of data.toolCalls) {
-            if (tc.toolName === 'kapruka_search_products') {
-              const results = Array.isArray(tc.result) ? tc.result : (tc.result?.results ?? tc.result?.products ?? []);
-              for (const p of results) {
-                if (p && p.product_code && !linkedSeen.has(p.product_code)) {
-                  linkedSeen.add(p.product_code);
-                  linkedProducts.push(p);
-                }
-              }
-            }
-            // Normalize kapruka_get_product single-item response to Product shape
-            if (tc.toolName === 'kapruka_get_product' && tc.result && !tc.result._raw_string) {
-              const raw = tc.result;
-              const normalized: Product = {
-                product_code: raw.id ?? raw.product_code ?? '',
-                name: raw.name ?? '',
-                price_lkr: raw.price?.amount ?? raw.price_lkr ?? 0,
-                category: raw.category?.name ?? raw.category ?? '',
-                image_url: raw.images?.[0] ?? raw.image_url ?? '',
-                description: raw.description ?? raw.summary ?? '',
-                stock_level: raw.stock_level ?? (raw.in_stock ? 'high' : 'low'),
-                variants: raw.variants,
-              };
-              if (normalized.product_code && !linkedSeen.has(normalized.product_code)) {
-                linkedSeen.add(normalized.product_code);
-                linkedProducts.push(normalized);
-              }
-            }
-            if (tc.toolName === 'kapruka_list_delivery_cities') {
-              const cities = Array.isArray(tc.result) ? tc.result : (tc.result?.cities ?? []);
-              suggestedCities.push(...cities);
-            }
-            if (tc.toolName === 'kapruka_create_order' && tc.result?.order_ref) {
-              orderCreated = tc.result;
-            }
-            if (tc.toolName === 'wasi_prefill_checkout' && tc.result) {
-              setOrderIntent(prev => ({ ...prev, ...tc.result }));
-            }
-            if (tc.toolName === 'wasi_add_to_cart' && tc.result) {
-              const p = tc.result;
-              if (p.price_lkr > params.budget) continue;
-              if (cart.some(i => i.product_code.toLowerCase() === p.product_id.toLowerCase())) continue;
-              // silent=true — LLM already replied, no second chat call
-              handleAddToCart({
-                product_code: p.product_id, name: p.product_name,
-                price_lkr: p.price_lkr, image_url: p.image_url,
-                category: p.category,
-              }, p.variant_id ? { id: p.variant_id, name: p.variant_name, price_lkr: p.price_lkr } : undefined, true);
-            }
-            if (tc.toolName === 'wasi_remove_from_cart' && tc.result?.product_id) {
-              handleRemoveItem(tc.result.product_id);
-            }
-            if (tc.toolName === 'wasi_update_cart_quantity' && tc.result?.product_id) {
-              handleUpdateQty(tc.result.product_id, tc.result.quantity ?? 1);
-            }
-            if (tc.toolName === 'wasi_order_now' && tc.result) {
-              const order = await handleChatOrder();
-              if (order) orderCreated = order;
-            }
-            if (tc.toolName === 'wasi_show_progress' && tc.result) {
-              void addMessage({
-                id: `progress-${Date.now()}-${tc.result.step}`,
-                role: 'assistant',
-                content: `*${tc.result.message}*`,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              });
-            }
-          }
-        }
-
-        const withinBudget = filterByBudget(linkedProducts, params.budget);
-        // Onboarding: always show cards on first discovery
-        const showProducts = withinBudget.length > 0;
-        if (showProducts) discoveryShown.current = true;
-        const replyMsg: Message = {
-          id: `reply-${Date.now()}`,
-          role: 'assistant',
-          content: data.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          products: showProducts ? withinBudget : undefined,
-          city_suggest: suggestedCities.length > 0 ? suggestedCities : undefined,
-          order_created: orderCreated,
-          order_intent: data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result
-        };
-        void addMessage(replyMsg);
-      }
-
-      // ── below is handleOnboard catch block
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsStreaming(false);
-    }
-  };
-
   // Main conversational submission hook
   const handleSendMessage = async (text: string) => {
     const userMsg: Message = {
@@ -314,6 +190,7 @@ export default function App() {
           occasion,
           session_id: sessionId,
           owner_id: ownerId,
+          conversation_id: activeConvId,
           persist: true,
           cart: cartForAI(),
           profile: profileToContext(profile),
@@ -508,6 +385,7 @@ export default function App() {
           occasion,
           session_id: sessionId,
           owner_id: ownerId,
+          conversation_id: activeConvId,
           persist: false,
           cart: cartSnapshot,
           lastCartAction: `Just added: ${product.name} (Rs.${price.toLocaleString()})`,
@@ -565,6 +443,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
+          owner_id: ownerId,
+          conversation_id: activeConvId,
           items: cart.map(i => ({
             product_code: i.product_code,
             variant_id: i.variant_id,
@@ -618,6 +498,8 @@ export default function App() {
         },
         body: JSON.stringify({
           session_id: sessionId,
+          owner_id: ownerId,
+          conversation_id: activeConvId,
           items: cart.map(i => ({
             product_code: i.product_code,
             price_lkr: i.price_lkr,
@@ -657,6 +539,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
+          owner_id: ownerId,
+          conversation_id: activeConvId,
           items: cart.map(i => ({
             product_code: i.product_code,
             variant_id: i.variant_id,
@@ -802,7 +686,7 @@ export default function App() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <header className="px-6 py-3 border-b border-black/5 bg-white/85 backdrop-blur-md shadow-sm sticky top-0 z-30 select-none">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setIsOnboarded(false); void clearMessages(); }}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { /* logo click — could open a "what is Wasi" modal in future */ }}>
             <div className="w-9 h-9 bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] rounded-xl flex items-center justify-center text-white font-display font-bold text-base shadow-md shadow-[#0F6E56]/20">
               W
             </div>
@@ -823,16 +707,6 @@ export default function App() {
               <span className="text-[11px] font-semibold text-[#0A5C45]">Live MCP</span>
             </div>
 
-            {/* Occasion chip — shown when onboarded */}
-            {isOnboarded && occasion && (
-              <div className="hidden sm:flex items-center gap-1.5 bg-[#FDF3DC] px-3 py-1.5 rounded-full border border-amber-200/60">
-                <span className="text-[11px] font-semibold text-amber-700">{occasion}</span>
-                {budget > 0 && (
-                  <span className="text-[10px] font-mono text-amber-600">· Rs.{budget.toLocaleString()}</span>
-                )}
-              </div>
-            )}
-
             {/* Auth — Sign in button (guest) or UserMenu (authed) */}
             {!authLoading && (
               user ? (
@@ -851,27 +725,44 @@ export default function App() {
               )
             )}
 
-            {isOnboarded && (
-              <button
-                onClick={() => { setIsOnboarded(false); void clearMessages(); void clearCart(); setOrderResult(null); }}
-                className="text-[11px] font-semibold text-[#6B6B6B] hover:text-[#1A1A1A] border border-black/8 px-3 py-1.5 rounded-full bg-white cursor-pointer active:scale-95 transition-all shadow-xs"
-              >
-                New Gift
-              </button>
-            )}
           </div>
         </div>
       </header>
 
       {/* ── Main workspace ──────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-5">
-        {!isOnboarded ? (
-          <Onboarding
-            onOnboard={handleOnboard}
-            onStartDemo={() => {}} // DEMO DISABLED — noop
-            isSignedIn={!!user}
+      <div className="flex-1 flex max-w-[100rem] mx-auto w-full">
+          {/* Conversation sidebar (desktop: sticky; mobile: drawer) */}
+        {user && (
+          <ConversationSidebar
+            conversations={conversations}
+            loading={convsLoading}
+            activeId={activeConvId}
+            user={user}
+            lang={language}
+            onSelect={(id) => { setActiveConvId(id); setOrderResult(null); }}
+            onNew={async () => {
+              const conv = await createConv({ language });
+              if (conv) setActiveConvId(conv.id);
+              return conv;
+            }}
+            onDelete={async (id) => {
+              const ok = await removeConv(id);
+              if (ok && id === activeConvId) {
+                setActiveConvId(conversations.find(c => c.id !== id)?.id ?? null);
+              }
+              return ok;
+            }}
+            onClearAll={async () => {
+              const ok = await clearAllConvs();
+              if (ok) { setActiveConvId(null); setOrderResult(null); }
+              return ok;
+            }}
+            onRefresh={refreshConvs}
           />
-        ) : (
+        )}
+
+      <main className="flex-1 p-4 md:p-5 min-w-0">
+        {activeConvId ? (
           <div className="space-y-4">
             {/* Save-cart banner — only for guests, only when cart has items */}
             {showSaveBanner && !user && (
@@ -916,8 +807,27 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : (
+          // Grey placeholder — shown when no conversation is active.
+          // The sidebar's "New chat" button is what the user clicks to start.
+          <EmptyStatePlaceholder
+            lang={language}
+            isSignedIn={!!user}
+            onSignIn={() => setSignInOpen(true)}
+            onNewChat={() => {
+              // Programmatic "New chat" — same as the sidebar button.
+              if (user) {
+                createConv({ language }).then(conv => {
+                  if (conv) { setActiveConvId(conv.id); }
+                });
+              } else {
+                setSignInOpen(true);
+              }
+            }}
+          />
         )}
       </main>
+      </div>
 
       {/* ── Auth + Profile modals (rendered globally) ─────────────────────── */}
       <SignInPanel

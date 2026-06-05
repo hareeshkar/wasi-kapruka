@@ -2,9 +2,10 @@ import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, Product, City, Order } from '../types';
-import { Send, MapPin, CheckCircle2, Ticket, Sparkles } from 'lucide-react';
+import { Send, Sparkles, Bot, User as UserIcon } from 'lucide-react';
 import ProductCard from './ProductCard';
 import AudioPlayer from './AudioPlayer';
+import OnboardingTemplate from './OnboardingTemplate';
 
 interface ChatSectionProps {
   messages: Message[];
@@ -83,10 +84,14 @@ export default function ChatSection({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-50">
-            <Sparkles className="w-10 h-10 text-[#0F6E56]" />
-            <p className="text-sm text-gray-500 font-sans">Your gift journey starts here…</p>
-          </div>
+          <OnboardingTemplate
+            lang={lang}
+            onStart={(occasion, budget) => {
+              const msg = `I need a ${occasion} gift. My budget is Rs.${budget.toLocaleString()} LKR. Suggest some options.`;
+              onSendMessage(msg);
+            }}
+            onCustom={(text) => onSendMessage(text)}
+          />
         )}
 
         {messages.map((msg, idx) => {
@@ -94,9 +99,23 @@ export default function ChatSection({
           return (
             <div
               key={msg.id}
-              className={`flex flex-col msg-in ${isUser ? 'items-end' : 'items-start'} space-y-2`}
+              className={`flex items-start gap-2 msg-in ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
               style={{ animationDelay: `${idx * 0.04}s` }}
             >
+              {/* Avatar */}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
+                isUser
+                  ? 'bg-gradient-to-br from-[#0F6E56] to-[#0A5C45]'
+                  : 'bg-gradient-to-br from-[#0F6E56] to-[#0A5C45]'
+              }`}>
+                {isUser ? (
+                  <UserIcon className="w-4 h-4 text-white" />
+                ) : (
+                  <Bot className="w-4 h-4 text-white" />
+                )}
+              </div>
+
+              <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-2 min-w-0 flex-1`}>
               {/* Bubble */}
               <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 isUser
@@ -232,6 +251,7 @@ export default function ChatSection({
                   </div>
                 </div>
               )}
+            </div>
             </div>
           );
         })}

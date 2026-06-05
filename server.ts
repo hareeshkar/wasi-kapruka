@@ -679,9 +679,12 @@ async function startServer() {
       const bodyItems = Array.isArray(body.items) ? body.items : [];
       let resolvedItems = bodyItems;
 
-      if (supabase && (body.session_id || body.owner_id)) {
-        // Auth: prefer owner_id; fall back to session_id for guest carts
-        const baseFilter = body.owner_id
+      if (supabase && (body.conversation_id || body.owner_id || body.session_id)) {
+        // Per-conversation cart: filter by conversation_id first (preferred),
+        // fall back to (owner_id) or (session_id) for backward compat.
+        const baseFilter = body.conversation_id
+          ? supabase.from('cart_items').select('*').eq('conversation_id', body.conversation_id)
+          : body.owner_id
           ? supabase.from('cart_items').select('*').eq('owner_id', body.owner_id)
           : supabase.from('cart_items').select('*').eq('session_id', body.session_id);
 
@@ -782,21 +785,22 @@ async function startServer() {
       // ── Persist order to Supabase (when session_id OR owner_id present) ────
       if (supabase && (body.session_id || body.owner_id) && order.order_ref) {
         supabase.from('orders').insert({
-          session_id:     body.session_id,
-          owner_id:       body.owner_id || null,
+          session_id:       body.session_id,
+          owner_id:         body.owner_id || null,
+          conversation_id:  body.conversation_id || null,
           kapruka_order_ref: order.order_ref,
-          total_lkr:      computedTotal,
-          delivery_fee:   deliveryFee,
-          items_total:    computedItemsTotal,
-          icing_charge:   icingCharge,
-          recipient_name: mcpPayload?.recipient?.name  || body.recipient_name,
-          recipient_phone: mcpPayload?.recipient?.phone || body.recipient_phone,
+          total_lkr:        computedTotal,
+          delivery_fee:     deliveryFee,
+          items_total:      computedItemsTotal,
+          icing_charge:     icingCharge,
+          recipient_name:   mcpPayload?.recipient?.name  || body.recipient_name,
+          recipient_phone:  mcpPayload?.recipient?.phone || body.recipient_phone,
           delivery_address: mcpPayload?.delivery?.address || body.address,
-          delivery_city:  mcpPayload?.delivery?.city || body.city,
-          delivery_date:  mcpPayload?.delivery?.date || body.delivery_date,
-          sender_name:    mcpPayload?.sender?.name || body.sender_name,
-          checkout_url:   order.checkout_url,
-          status:         'pending',
+          delivery_city:    mcpPayload?.delivery?.city || body.city,
+          delivery_date:    mcpPayload?.delivery?.date || body.delivery_date,
+          sender_name:      mcpPayload?.sender?.name || body.sender_name,
+          checkout_url:     order.checkout_url,
+          status:           'pending',
         }).then(({ error }) => {
           if (error) console.error('[supabase order] insert failed', error.message);
         });
@@ -821,6 +825,183 @@ async function startServer() {
     }
   });
 
+  // ── Conversations ─────────────────────────────────────────────────────────────
+  // List user's conversations, sorted by last_message_at desc.
+  app.get('/api/conversations', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase not configured' });
+      const ownerId = (req.query.owner_id as string) || null;
+      const sessionId = (req.query.session_id as string) || null;
+      const q = supabase.from('conversations').select('*').order('last_message_at', { ascending: false });
+      const filtered = ownerId ? q.eq('owner_id', ownerId) : q.eq('session_id', sessionId);
+      const { data, error } = await filtered;
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true, conversations: data || [] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Create a new conversation.
+  app.post('/api/conversations', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase not configured' });
+      const { owner_id, session_id, occasion, budget, language } = req.body || {};
+      if (!session_id && !owner_id) {
+        return res.status(400).json({ success: false, error: 'session_id or owner_id required' });
+      }
+      const row: Record<string, any> = {
+        session_id: session_id || 'guest',
+        title: 'New conversation',
+        language: language || 'en',
+        last_message_at: new Date().toISOString(),
+      };
+      if (owner_id) row.owner_id = owner_id;
+      if (occasion) row.occasion = occasion;
+      if (budget != null) row.budget = budget;
+      const { data, error } = await supabase.from('conversations').insert(row).select().single();
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true, conversation: data });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Delete a conversation.
+  app.delete('/api/conversations/:id', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase not configured' });
+      const { error } = await supabase.from('conversations').delete().eq('id', req.params.id);
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Clear ALL conversations for a user (or session). Also clears their
+  // messages, cart_items, and orders (since they cascade on conversation_id).
+  app.delete('/api/conversations', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase not configured' });
+      const ownerId = (req.query.owner_id as string) || null;
+      const sessionId = (req.query.session_id as string) || null;
+      if (!ownerId && !sessionId) {
+        return res.status(400).json({ success: false, error: 'owner_id or session_id required' });
+      }
+      const q = ownerId
+        ? supabase.from('conversations').delete().eq('owner_id', ownerId)
+        : supabase.from('conversations').delete().eq('session_id', sessionId);
+      const { error } = await q;
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Generate (or update) a conversation title using a fast LLM call.
+  // Uses the SAME OpenAI-compatible client pattern as the main chat
+  // (via the llm-adapter's OpenAIAdapter), so DeepSeek v4 reasoning_content
+  // and other provider quirks are handled consistently.
+  app.post('/api/conversations/:id/title', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase not configured' });
+      const { owner_id, session_id } = req.body || {};
+      const convId = req.params.id;
+
+      // Fetch the conversation itself to use occasion/budget as a title source.
+      const { data: conv, error: convErr } = await supabase
+        .from('conversations')
+        .select('occasion, budget, language')
+        .eq('id', convId)
+        .single();
+      if (convErr) return res.status(500).json({ success: false, error: convErr.message });
+
+      // Fetch the first user message of this conversation (skip the synthetic
+      // [ONBOARDING JUST COMPLETED] system marker — that text confuses the title LLM).
+      const { data: msgs, error: msgErr } = await supabase
+        .from('messages')
+        .select('role, content')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true })
+        .limit(6);
+      if (msgErr) return res.status(500).json({ success: false, error: msgErr.message });
+
+      const realUserMsg = (msgs || []).find((m: any) =>
+        m.role === 'user' &&
+        m.content &&
+        !m.content.startsWith('[ONBOARDING JUST COMPLETED]')
+      )?.content || '';
+
+      // Build the LLM prompt. Prefer the user's actual message; fall back to
+      // occasion + budget if no real user message is available yet.
+      let userPrompt: string;
+      if (realUserMsg) {
+        userPrompt =
+          `Generate a SHORT, punchy 3-5 word title for a Kapruka gift concierge chat. ` +
+          `The user's first real message: "${realUserMsg.slice(0, 200)}"\n\n` +
+          `Reply with ONLY the title. No quotes, no punctuation at end. Examples: ` +
+          `"Birthday cake for daughter", "Anniversary roses Colombo", "Just because chocolate"`;
+      } else {
+        userPrompt =
+          `Generate a SHORT, punchy 3-5 word title for a Kapruka gift concierge chat ` +
+          `about a ${conv?.occasion || 'gift'} surprise with a budget of Rs.${conv?.budget || 'unknown'}.\n\n` +
+          `Reply with ONLY the title. No quotes, no punctuation at end. Examples: ` +
+          `"Birthday gift ideas", "Anniversary roses", "Just because chocolate"`;
+      }
+
+      // Use the SAME OpenAI client pattern as the main chat via the adapter's
+      // pattern. This way DeepSeek v4 reasoning_content is handled the same way
+      // as the rest of the app.
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      const baseURL = 'https://api.deepseek.com/v1';
+      const model = 'deepseek-v4-flash';
+      let title = 'New conversation';
+
+      if (apiKey) {
+        try {
+          const { OpenAI } = await import('openai').catch(() => ({ OpenAI: null }) as any);
+          if (!OpenAI) throw new Error('openai SDK not installed');
+          const client = new OpenAI({ apiKey, baseURL });
+          // max_tokens=30 to keep cost low; temperature=0.5 for slight creativity
+          // without randomness. NO thinking enabled — title gen is a simple task.
+          const response = await client.chat.completions.create({
+            model,
+            messages: [
+              { role: 'system', content: 'You generate short titles for chat conversations. Reply with only the title text, nothing else.' },
+              { role: 'user', content: userPrompt },
+            ],
+            max_tokens: 30,
+            temperature: 0.5,
+          });
+          // DeepSeek v4 puts the answer in `content`; reasoning (if enabled)
+          // is in a separate `reasoning_content` field — we don't enable it here,
+          // so content is the title.
+          let raw = response.choices?.[0]?.message?.content || '';
+          raw = raw.trim().replace(/^["'`]+|["'`]+$/g, '');
+          // Some responses have multiple lines (e.g. reasoning); take the LAST non-empty line
+          const lastLine = raw.split('\n').map((l: string) => l.trim()).filter(Boolean).pop() || '';
+          if (lastLine) {
+            title = lastLine.slice(0, 60);
+            console.log(`[title gen] ${convId.slice(0, 8)} → "${title}"`);
+          } else {
+            console.warn('[title gen] empty content in response:', JSON.stringify(response.choices?.[0]));
+          }
+        } catch (e: any) {
+          console.error('[title gen] OpenAI/DeepSeek call failed:', e.message, e.status, e.response?.data);
+        }
+      } else {
+        console.warn('[title gen] DEEPSEEK_API_KEY not set; skipping');
+      }
+      const { error } = await supabase.from('conversations').update({ title }).eq('id', convId);
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true, title });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // ── Chat Endpoint ────────────────────────────────────────────────────────────
   app.post('/api/chat', async (req, res) => {
     const {
@@ -834,6 +1015,7 @@ async function startServer() {
       formState,
       session_id,
       owner_id,
+      conversation_id,
       persist = true,
       profile,
     } = req.body;
@@ -969,12 +1151,61 @@ async function startServer() {
       );
 
       if (supabase && persist && (session_id || owner_id)) {
-        const baseRow = owner_id ? { owner_id, session_id } : { session_id };
+        // Auto-create a conversation if we don't have one yet (first chat of a thread).
+        let activeConvId = conversation_id;
+        if (!activeConvId) {
+          const convRow: Record<string, any> = {
+            session_id: session_id || 'guest',
+            language: language || 'en',
+            last_message_at: new Date().toISOString(),
+            title: 'New conversation',
+          };
+          if (owner_id) convRow.owner_id = owner_id;
+          if (occasion) convRow.occasion = occasion;
+          if (budget != null) convRow.budget = budget;
+          const { data: conv, error: convErr } = await supabase
+            .from('conversations')
+            .insert(convRow)
+            .select()
+            .single();
+          if (!convErr && conv) activeConvId = conv.id;
+        } else {
+          // Bump last_message_at on the active conversation
+          await supabase
+            .from('conversations')
+            .update({ last_message_at: new Date().toISOString() })
+            .eq('id', activeConvId);
+        }
+
+        const baseRow: Record<string, any> = { session_id };
+        if (owner_id) baseRow.owner_id = owner_id;
+        if (activeConvId) baseRow.conversation_id = activeConvId;
+
         const { error } = await supabase.from('messages').insert([
           { ...baseRow, role: 'user',      content: message },
           { ...baseRow, role: 'assistant', content: reply, tool_calls: toolCalls ?? null },
         ]);
         if (error) console.error('[supabase chat] insert failed', error.message);
+
+        // Fire-and-forget title generation for new conversations
+        if (activeConvId && !conversation_id) {
+          supabase
+            .from('conversations')
+            .select('title')
+            .eq('id', activeConvId)
+            .single()
+            .then(({ data: conv }) => {
+              if (conv && conv.title === 'New conversation') {
+                // Generate a title via a fire-and-forget fetch to ourselves
+                const port = process.env.PORT || 3000;
+                fetch(`http://localhost:${port}/api/conversations/${activeConvId}/title`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ owner_id, session_id }),
+                }).catch(err => console.error('[title gen] failed:', err.message));
+              }
+            });
+        }
       }
 
       res.json({ success: true, reply, toolCalls });

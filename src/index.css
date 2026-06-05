@@ -192,3 +192,19 @@
   font-size: 0.78em;
   font-family: "JetBrains Mono", monospace;
 }
+
+/* ── Onboarding template entrance ────────────────────────────────── */
+@keyframes onboardIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-onboard-in {
+  animation: onboardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes scaleIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.scale-in {
+  animation: scaleIn 0.25s ease-out forwards;
+}
