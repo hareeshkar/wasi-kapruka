@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+build/
+dist/
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment (keep .env.example)
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Playwright browser test traces (333+ files)
+.playwright-mcp/
+
+# Test output directory (smoke tests, probe results, prod tests)
+output/
+
+# Screenshots from browser testing (54+ files)
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Spock test output
+spock-output.json
+
+# MCP exhaustive probe outputs (large JSON dumps)
+mcp-EXHAUSTIVE-raw.json
+mcp-FINAL-raw.json
+mcp-live-*.json
+
+# Temp probe scripts
+mcp-*.ts
+mcp-*.mjs
+mcp-*.js
+!spock-test.js
+
+# Experimental scratch files
+scratch/
+
+# Misc temp configs
+metadata.json
+checkpoint-readme.yml
+langgraph-memory.yml
+langgraph-postgres.yml
+
+# Claude/settings
+.claude/
+
+# Session storage
+.wasi-session
+
+# Vite cache
+.vite/
+test_*.txt
