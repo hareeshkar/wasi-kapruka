@@ -282,7 +282,7 @@ export default function EmptyStatePlaceholder({
             <span className={`text-[20px] sm:text-[24px] font-medium ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`} style={{ color: 'rgba(64,41,112,0.55)' }}>
               Let's find
             </span>
-            <span className="inline-flex items-center overflow-visible relative" style={{ height: '1.5em', minWidth: '220px', paddingTop: '0.15em', paddingBottom: '0.15em' }}>
+            <span className="inline-flex items-center overflow-visible relative" style={{ minWidth: '220px', paddingTop: '0.15em', paddingBottom: '0.15em', width: 'fit-content' }}>
               <span
                 className={`text-[20px] sm:text-[24px] font-semibold ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : 'font-display italic'}`}
                 style={{
