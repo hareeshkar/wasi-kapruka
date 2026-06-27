@@ -33,7 +33,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
 
   const copy = {
     en: {
-      badge: 'KAPRUKA SPECIAL AGENT',
+      badge: 'KAPRUKA AI SHOPPING BESTIE',
       hero: 'I am Wasi 🌿',
       sub: 'Tell me who you love. I find the perfect Kapruka gift, validate delivery to any Sri Lankan city, and take you to checkout.',
       langLabel: 'SELECT LANGUAGE',
@@ -80,12 +80,12 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
 
       {/* Hero text */}
       <div className="text-center space-y-4 mb-10 z-10 animate-fade-in">
-        <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#E1F5EE] text-[#0A5C45] rounded-full text-[10px] font-mono font-bold tracking-widest uppercase border border-[#0F6E56]/15 shadow-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#0F6E56] animate-pulse" />
+        <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#EDE5F8] text-[#5B3E8A] rounded-full text-[10px] font-mono font-bold tracking-widest uppercase border border-[#402970]/15 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#402970] animate-pulse" />
           {c.badge}
         </span>
 
-        <h1 className={`text-5xl sm:text-6xl md:text-7xl font-display font-bold tracking-tight leading-none text-[#1A1A1A] ${isSi ? 'font-sinhala text-4xl' : isTa ? 'font-tamil text-4xl' : ''}`}>
+        <h1 className={`text-5xl sm:text-6xl md:text-7xl font-display font-bold tracking-tight leading-none text-ink ${isSi ? 'font-sinhala text-4xl' : isTa ? 'font-tamil text-4xl' : ''}`}>
           {c.hero}
         </h1>
 
@@ -102,7 +102,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
           {/* Language selector */}
           <div className="space-y-3">
             <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#6B6B6B] flex items-center gap-2">
-              <Globe className="w-3.5 h-3.5 text-[#0F6E56]" />
+              <Globe className="w-3.5 h-3.5 text-[#402970]" />
               {c.langLabel}
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -112,8 +112,8 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
                   onClick={() => setLanguage(lang)}
                   className={`py-3 px-4 rounded-2xl font-medium text-sm transition-all duration-200 cursor-pointer ${
                     language === lang
-                      ? 'bg-[#0F6E56] text-white shadow-md shadow-[#0F6E56]/20 scale-[1.02]'
-                      : 'bg-gray-50 text-[#1A1A1A] border border-black/5 hover:bg-gray-100/80 hover:border-[#0F6E56]/20'
+                      ? 'bg-[#402970] text-white shadow-md shadow-[#402970]/20 scale-[1.02]'
+                      : 'bg-gray-50 text-ink border border-black/5 hover:bg-gray-100/80 hover:border-[#402970]/20'
                   } ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : 'font-sans'}`}
                 >
                   {lang === 'en' ? 'English' : lang === 'si' ? 'සිංහල' : 'தமிழ்'}
@@ -137,8 +137,8 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
                     onClick={() => setSelectedOccasion(occ.name)}
                     className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl border text-xs cursor-pointer transition-all duration-200 ${
                       isSelected
-                        ? 'bg-[#E1F5EE] border-[#0F6E56] text-[#0A5C45] shadow-sm scale-[1.04]'
-                        : 'bg-gray-50/60 border-black/5 text-gray-600 hover:bg-white hover:border-[#0F6E56]/25 hover:shadow-sm'
+                        ? 'bg-[#EDE5F8] border-[#402970] text-[#5B3E8A] shadow-sm scale-[1.04]'
+                        : 'bg-gray-50/60 border-black/5 text-gray-600 hover:bg-white hover:border-[#402970]/25 hover:shadow-sm'
                     } ${isSi ? 'font-sinhala text-[10px]' : isTa ? 'font-tamil text-[10px]' : 'font-sans'}`}
                   >
                     <span className="text-2xl mb-1.5">{occ.icon}</span>
@@ -155,12 +155,12 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
               <label className={`text-[10px] font-mono font-bold uppercase tracking-widest text-[#6B6B6B] ${isSi ? 'font-sinhala' : ''}`}>
                 {c.budgetLabel}
               </label>
-              <div className="flex items-baseline gap-1 bg-[#E1F5EE] px-3 py-1.5 rounded-xl border border-[#0F6E56]/15">
-                <span className="text-[10px] font-mono text-[#0A5C45] font-semibold">Rs.</span>
-                <span className="text-lg font-display font-bold text-[#0A5C45] leading-none">
+              <div className="flex items-baseline gap-1 bg-[#EDE5F8] px-3 py-1.5 rounded-xl border border-[#402970]/15">
+                <span className="text-[10px] font-mono text-[#5B3E8A] font-semibold">Rs.</span>
+                <span className="text-lg font-display font-bold text-[#5B3E8A] leading-none">
                   {budget.toLocaleString()}
                 </span>
-                <span className="text-[10px] font-mono text-[#0A5C45]/60 font-semibold">LKR</span>
+                <span className="text-[10px] font-mono text-[#5B3E8A]/60 font-semibold">LKR</span>
               </div>
             </div>
 
@@ -172,9 +172,9 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
                 step={500}
                 value={budget}
                 onChange={(e) => setBudget(Number(e.target.value))}
-                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-[#0F6E56]"
+                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-[#402970]"
                 style={{
-                  background: `linear-gradient(to right, #0F6E56 ${((budget - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%, #E5E7EB ${((budget - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%)`
+                  background: `linear-gradient(to right, #402970 ${((budget - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%, #E5E7EB ${((budget - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100}%)`
                 }}
               />
               {/* Properly proportioned tick labels */}
@@ -185,7 +185,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
                     <span
                       key={v}
                       className={`absolute text-[9px] font-mono -translate-x-1/2 transition-colors ${
-                        budget >= v ? 'text-[#0F6E56] font-bold' : 'text-gray-400'
+                        budget >= v ? 'text-[#402970] font-bold' : 'text-gray-400'
                       }`}
                       style={{ left: `${pct}%` }}
                     >
@@ -201,7 +201,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
           <div className="pt-1">
             <button
               onClick={handleStart}
-              className={`w-full bg-[#0F6E56] hover:bg-[#0A5C45] text-white font-semibold py-4 px-6 rounded-2xl cursor-pointer shadow-lg shadow-[#0F6E56]/25 hover:shadow-xl hover:shadow-[#0F6E56]/30 transition-all duration-200 active:scale-[0.98] btn-shimmer ${isSi ? 'font-sinhala' : isTa ? 'font-tamil' : 'font-display'}`}
+              className={`w-full bg-[#402970] hover:bg-[#5B3E8A] text-white font-semibold py-4 px-6 rounded-2xl cursor-pointer shadow-lg shadow-[#402970]/25 hover:shadow-xl hover:shadow-[#402970]/30 transition-all duration-200 active:scale-[0.98] btn-shimmer ${isSi ? 'font-sinhala' : isTa ? 'font-tamil' : 'font-display'}`}
             >
               {c.cta}
             </button>
@@ -213,7 +213,7 @@ export default function Onboarding({ onOnboard, onStartDemo, isSignedIn }: Onboa
               <button
                 type="button"
                 onClick={() => setSignInOpen(true)}
-                className="text-[11px] text-[#0A5C45] hover:text-[#0F6E56] font-semibold cursor-pointer inline-flex items-center gap-1.5 group"
+                className="text-[11px] text-[#5B3E8A] hover:text-[#402970] font-semibold cursor-pointer inline-flex items-center gap-1.5 group"
               >
                 <ShieldCheck className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                 {c.saveCta}

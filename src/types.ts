@@ -1,25 +1,52 @@
+export interface ProductAttributes {
+  type?: string;
+  subtype?: string;
+  weight?: string;
+  vendor?: string;
+}
+
+export interface ProductShipping {
+  ships_from?: string;
+  ships_internationally?: boolean;
+  restricted_countries?: string[];
+}
+
 export interface Product {
-  product_code: string;
+  product_code: string;        // MCP field: `id`
   name: string;
-  price_lkr: number;
-  category: string;
+  price_lkr: number;           // MCP field: `price.amount`
+  compare_at_price?: number;   // MCP field: `compare_at_price.amount` — original before sale
+  category: string;            // MCP field: `category.name`
   image_url: string;
-  description?: string;
-  stock_level?: string;
+  description?: string;        // MCP field: `description` (T2) or `summary` (T1)
+  summary?: string;            // MCP field: `summary` — shorter preview text
+  stock_level?: string;        // "low" | "medium" | "high"
+  in_stock?: boolean;          // MCP field: `in_stock`
   variants?: Array<ProductVariant>;
+  url?: string;                // MCP field: `url` — direct Kapruka product page link
+  images?: string[];           // MCP field: `images[]` (T2) — 2-4 CDN URLs for gallery
+  attributes?: ProductAttributes;  // MCP field: `attributes` (T2) — weight, vendor, type
+  shipping?: ProductShipping;      // MCP field: `shipping` (T2) — ships_from, international
+  currency?: string;           // MCP currency parameter — LKR, USD, GBP, AUD, CAD, EUR
+  rating?: number | null;      // MCP field: `rating`
 }
 
 export interface ProductVariant {
   id: string;
   name: string;
   price_lkr: number;
+  currency?: string;
   stock_level?: string;
+  sku?: string;
+  in_stock?: boolean;
+  attributes?: { weight?: string };
 }
 
 export interface CartItem {
   product_code: string;
   name: string;
   price_lkr: number;
+  currency?: string;
   image_url: string;
   quantity: number;
   category?: string;
@@ -29,15 +56,18 @@ export interface CartItem {
 
 export interface City {
   name: string;
-  code: string;
-  aliases: string[];
+  code?: string;
+  aliases?: string[];
+  url?: string;
 }
 
 export interface DeliveryCheckResult {
   available: boolean;
-  delivery_fee: number;
-  perishable_warning: boolean;
-  notes: string;
+  rate: number;                  // MCP field name — always LKR
+  delivery_fee?: number;         // server-patched alias (rate → delivery_fee)
+  currency: string;              // MCP returns "LKR"
+  perishable_warning: boolean | null;
+  notes?: string;                // not returned by MCP, optional
   next_available_date?: string;
 }
 
@@ -67,6 +97,17 @@ export interface OrderIntent {
   occasion?: string;
   sender_name?: string;
   // sender_email omitted: MCP rejects it; Kapruka collects email at checkout
+  location_type?: 'house' | 'apartment' | 'office' | 'other';
+  delivery_instructions?: string;  // max 250 chars; gate codes, buzzer, access notes
+  anonymous?: boolean;             // hide sender name on Kapruka gift card
+  currency?: 'LKR' | 'USD' | 'GBP' | 'AUD' | 'CAD' | 'EUR';
+  order_mode?: 'gift' | 'self';    // "it's a gift" (default) vs "it's for me"
+}
+
+export interface Category {
+  name: string;
+  url?: string;
+  children?: Array<{ name: string; url?: string }>;
 }
 
 export interface Message {
@@ -81,4 +122,30 @@ export interface Message {
   order_created?: Order;
   tracking_result?: any;
   order_intent?: OrderIntent;
+  /** Pagination state from the last product search — lets "show me more"
+   *  continue from page 2 instead of repeating page 1. */
+  search_cursor?: { q: string; cursor: string } | null;
+  /** Products selected for side-by-side comparison. */
+  compare_products?: Product[];
+  /** Category tree from kapruka_list_categories. */
+  categories?: Category[];
+  /** Product detail for inline display (triggered by LLM). */
+  product_detail?: Product;
+  /** Images uploaded with this message (Gemini vision). */
+  uploaded_images?: Array<{ data: string; mimeType: string }>;
+  /** Voice message audio (base64-encoded). */
+  audio_data?: string;
+  /** MIME type of the audio (e.g. 'audio/webm'). */
+  audio_mime_type?: string;
+  /** Transcription text shown below voice bubble (display only). */
+  transcription?: string;
+  /** Error state for failed messages — enables Retry button. */
+  error?: {
+    message: string;
+    category: string;
+    isRetryable: boolean;
+    retryAfterMs?: number;
+  };
+  /** Flag to indicate this message is being retried. */
+  isRetrying?: boolean;
 }

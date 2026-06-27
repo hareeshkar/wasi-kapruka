@@ -29,12 +29,16 @@ npm-debug.log*
 # Playwright / browser test traces
 .playwright-mcp/
 
-# Test output & results
+# Test output, reports & scripts (local only)
 output/
+tests/
+scratch/
 test_*.txt
 test_handshake_output.txt
 test_output.txt
 spock-output.json
+smoke-test.js
+spock-test.js
 
 # Screenshots / media from testing
 *.png
@@ -50,14 +54,6 @@ mcp-live-*.json
 mcp-*.ts
 mcp-*.mjs
 mcp-*.js
-!spock-test.js
-
-# Test scripts (local only)
-smoke-test.js
-spock-test.js
-
-# Experimental scratch files
-scratch/
 
 # Local dev tools
 .serena/

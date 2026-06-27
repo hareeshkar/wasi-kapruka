@@ -2,39 +2,54 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CartItem, Product } from '../types';
 import { getOrCreateSession, supabase } from '../lib/supabase';
 
-// Cart hook — supports BOTH modes:
-//   - Guest:  rows have session_id = local_sid, owner_id IS NULL
-//   - Auth:   rows have owner_id = auth.uid(), session_id may be anything
-// The hook re-queries whenever the auth state changes (sign-in / sign-out).
+// Cart hook — scoped to a SINGLE CONVERSATION.
+// Cart contents are filtered by (owner_id + conversation_id) when authed,
+// or (session_id + conversation_id) when guest.
+// When conversationId is null, the cart is empty and add/remove are no-ops.
 
 type UseSupabaseCartOpts = {
-  ownerId: string | null; // null = guest mode
+  ownerId: string | null;
+  conversationId: string | null;
 };
 
-export function useSupabaseCart({ ownerId }: UseSupabaseCartOpts) {
+export function useSupabaseCart({ ownerId, conversationId }: UseSupabaseCartOpts) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const sessionId = useMemo(() => getOrCreateSession(), []);
 
-  // Reload cart when auth state changes
+  // Reload cart when conversation OR auth state changes
   useEffect(() => {
+    if (!conversationId) {
+      setCart([]);
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
 
     const query = supabase
       .from('cart_items')
       .select('*')
+      .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
-    // Supabase chain — filter on whichever identity is active
-    const filtered = ownerId
-      ? query.eq('owner_id', ownerId)
-      : query.eq('session_id', sessionId);
-
-    filtered.then(({ data, error }) => {
+    query.then(({ data, error }) => {
       if (error) console.error('[supabase cart] load failed', error.message);
       if (active) {
-        setCart((data as CartItem[]) || []);
+        // DB rows store the name as `product_name`; CartItem expects `name`.
+        // Casting rows directly left name undefined after refresh — map explicitly.
+        const rows: CartItem[] = (data || []).map((r: any) => ({
+          product_code: r.product_code,
+          name: r.product_name ?? r.name ?? 'Item',
+          price_lkr: r.price_lkr ?? 0,
+          currency: r.currency ?? 'LKR',
+          image_url: r.image_url ?? '',
+          quantity: r.quantity ?? 1,
+          category: r.category ?? undefined,
+          variant_id: r.variant_id ?? undefined,
+          variant_name: r.variant_name ?? undefined,
+        }));
+        setCart(rows);
         setLoading(false);
       }
     });
@@ -42,14 +57,19 @@ export function useSupabaseCart({ ownerId }: UseSupabaseCartOpts) {
     return () => {
       active = false;
     };
-  }, [sessionId, ownerId]);
+  }, [conversationId, ownerId]);
 
   const addItem = useCallback(async (product: Product, variant?: any) => {
+    if (!conversationId) {
+      console.warn('[supabase cart] addItem called with no active conversation');
+      return;
+    }
     const price = variant ? variant.price_lkr : product.price_lkr;
     const newItem: CartItem = {
       product_code: product.product_code,
       name: product.name,
       price_lkr: price,
+      currency: product.currency ?? 'LKR',
       image_url: product.image_url,
       quantity: 1,
       category: product.category,
@@ -57,7 +77,6 @@ export function useSupabaseCart({ ownerId }: UseSupabaseCartOpts) {
       variant_name: variant?.name,
     };
 
-    // React state update with quantity merge
     let itemToPersist: CartItem = newItem;
     const matchKey = newItem.product_code.toLowerCase();
     setCart(prev => {
@@ -73,82 +92,66 @@ export function useSupabaseCart({ ownerId }: UseSupabaseCartOpts) {
       return [...prev, newItem];
     });
 
-    // Build the row payload with auth-aware identity
+    // Build the row payload — identity via conversation_id (primary key now)
     const row: Record<string, any> = {
+      conversation_id: conversationId,
       product_code: itemToPersist.product_code,
       product_name: itemToPersist.name,
       quantity: itemToPersist.quantity,
       price_lkr: itemToPersist.price_lkr,
+      currency: itemToPersist.currency ?? 'LKR',
       image_url: itemToPersist.image_url,
       category: itemToPersist.category,
       variant_id: itemToPersist.variant_id,
       variant_name: itemToPersist.variant_name,
     };
-    if (ownerId) {
-      row.owner_id = ownerId;
-      // Keep session_id for legacy compat; could be null
-      row.session_id = sessionId;
-    } else {
-      row.session_id = sessionId;
-    }
+    if (ownerId) row.owner_id = ownerId;
+    row.session_id = sessionId;
 
-    // Upsert: on (session_id, product_code) when guest, on (owner_id, product_code) when authed.
-    //
-    // Auth path note: we can't use a plain onConflict upsert here because the
-    // unique constraint is on (session_id, product_code) — but for authed users
-    // the dedup key is (owner_id, product_code). So we do a SELECT-then-INSERT-or-UPDATE:
-    //   1. SELECT by (owner_id, product_code)
-    //   2. if exists: UPDATE
-    //   3. if missing: INSERT
-    // The previous version tried UPDATE first and only inserted on updateErr — but
-    // an UPDATE that matches 0 rows returns NO error, so the INSERT never fired
-    // and cart_items stayed empty for authed users.
+    // SELECT-then-INSERT-or-UPDATE pattern (per-conversation unique)
+    const { data: existing } = await supabase
+      .from('cart_items')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('product_code', itemToPersist.product_code)
+      .maybeSingle();
+
     let error: any = null;
-    if (ownerId) {
-      const { data: existing } = await supabase
+    if (existing) {
+      const r = await supabase
         .from('cart_items')
-        .select('id')
-        .eq('owner_id', ownerId)
-        .eq('product_code', itemToPersist.product_code)
-        .maybeSingle();
-
-      if (existing) {
-        const { error: updateErr } = await supabase
-          .from('cart_items')
-          .update({
-            quantity: itemToPersist.quantity,
-            price_lkr: itemToPersist.price_lkr,
-            variant_id: itemToPersist.variant_id,
-            variant_name: itemToPersist.variant_name,
-          })
-          .eq('id', existing.id);
-        error = updateErr;
-      } else {
-        const { error: insertErr } = await supabase.from('cart_items').insert(row);
-        error = insertErr;
-      }
+        .update({
+          quantity: itemToPersist.quantity,
+          price_lkr: itemToPersist.price_lkr,
+          currency: itemToPersist.currency ?? 'LKR',
+          variant_id: itemToPersist.variant_id,
+          variant_name: itemToPersist.variant_name,
+        })
+        .eq('id', existing.id);
+      error = r.error;
     } else {
-      // Guest: use UNIQUE(session_id, product_code) onConflict
-      const { error: upsertErr } = await supabase
-        .from('cart_items')
-        .upsert(row, { onConflict: 'session_id,product_code' });
-      error = upsertErr;
+      const r = await supabase.from('cart_items').insert(row);
+      error = r.error;
     }
 
     if (error) console.error('[supabase cart] upsert failed', error.message);
-  }, [sessionId, ownerId]);
+  }, [sessionId, ownerId, conversationId]);
 
   const removeItem = useCallback(async (code: string) => {
+    if (!conversationId) return;
     const matchKey = code.toLowerCase();
     setCart(prev => prev.filter(i => i.product_code.toLowerCase() !== matchKey));
 
-    let q = supabase.from('cart_items').delete();
-    q = ownerId ? q.eq('owner_id', ownerId) : q.eq('session_id', sessionId);
-    const { error } = await q.eq('product_code', code);
+    const { error } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('product_code', code);
     if (error) console.error('[supabase cart] delete failed', error.message);
-  }, [sessionId, ownerId]);
+  }, [conversationId]);
 
   const updateQty = useCallback(async (code: string, qty: number) => {
+    if (!conversationId) return;
     if (qty <= 0) {
       await removeItem(code);
       return;
@@ -158,19 +161,23 @@ export function useSupabaseCart({ ownerId }: UseSupabaseCartOpts) {
       i.product_code.toLowerCase() === matchKey ? { ...i, quantity: qty } : i
     ));
 
-    let q = supabase.from('cart_items').update({ quantity: qty });
-    q = ownerId ? q.eq('owner_id', ownerId) : q.eq('session_id', sessionId);
-    const { error } = await q.eq('product_code', code);
+    const { error } = await supabase
+      .from('cart_items')
+      .update({ quantity: qty })
+      .eq('conversation_id', conversationId)
+      .eq('product_code', code);
     if (error) console.error('[supabase cart] update failed', error.message);
-  }, [sessionId, ownerId, removeItem]);
+  }, [conversationId, removeItem]);
 
   const clearCart = useCallback(async () => {
+    if (!conversationId) return;
     setCart([]);
-    let q = supabase.from('cart_items').delete();
-    q = ownerId ? q.eq('owner_id', ownerId) : q.eq('session_id', sessionId);
-    const { error } = await q;
+    const { error } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('conversation_id', conversationId);
     if (error) console.error('[supabase cart] clear failed', error.message);
-  }, [sessionId, ownerId]);
+  }, [conversationId]);
 
   return { cart, loading, addItem, removeItem, updateQty, clearCart };
 }

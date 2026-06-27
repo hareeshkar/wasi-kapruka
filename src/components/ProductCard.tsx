@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
 import { Plus, Check, Eye } from 'lucide-react';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
@@ -24,6 +24,9 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
     product.variants?.length ? product.variants[0] : undefined
   );
   const [isAdded, setIsAdded] = useState(false);
+
+  // Reset isAdded when product changes (e.g., in a virtualized list)
+  useEffect(() => { setIsAdded(false); }, [product.product_code]);
 
   const handleAdd = () => {
     if (isAdded) return;
@@ -100,7 +103,7 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
             boxShadow: '0 2px 6px rgba(64,41,112,0.18)',
           }}
         >
-          Rs.{price.toLocaleString()}
+           {formatPrice(price, currency)}
         </div>
 
         {/* Bottom overlay — name + CTAs */}

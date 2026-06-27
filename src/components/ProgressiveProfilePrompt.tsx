@@ -13,7 +13,7 @@ interface ProgressiveProfilePromptProps {
 }
 
 const COPY = {
-  intro:     { en: 'Help Wasi know you better', si: 'වාසිට ඔබව 更好 දැනගන්න උදව් කරන්න', ta: 'வாசி உங்களை更好 அறிந்துகொள்ள உதவுங்கள்' },
+  intro:     { en: 'Help Wasi know you better', si: 'වාසිට ඔබව වඩා හොඳින් දැනගන්න උදව් කරන්න', ta: 'வாசி உங்களை நன்றாக அறிந்துகொள்ள உதவுங்கள்' },
   why:       { en: 'Wasi uses these to suggest better gifts.', si: 'වඩා හොඳ තෑගි යෝජනා කිරීමට වාසි මේවා භාවිතා කරයි.', ta: 'சிறந்த பரிசுகளை பரிந்துரைக்க வாசி இவற்றைப் பயன்படுத்துகிறார்.' },
   skip:      { en: 'Skip for now',  si: 'දැනට මඟ හරින්න',  ta: 'இப்போது தவிர்' },
   next:      { en: 'Next',          si: 'ඊළඟ',          ta: 'அடுத்து' },
@@ -41,10 +41,19 @@ const COPY = {
   },
 };
 
-// Nested lookup helper — recipientOpts/genderOpts are objects, not leaves
-const t = (key: keyof typeof COPY, lang: 'en' | 'si' | 'ta' = 'en'): any => {
+// Leaf-key lookup: returns a string. For dict keys, returns '' (callers must index via COPY[key][code][lang] directly).
+const t = (key: keyof typeof COPY, lang: 'en' | 'si' | 'ta' = 'en'): string => {
   const v = COPY[key] as any;
-  return v[lang] ?? v.en;
+  if (!v) return '';
+  if (typeof v.en === 'string') return (v[lang] || v.en) as string;
+  return '';
+};
+const td = (key: keyof typeof COPY, code: string, lang: 'en' | 'si' | 'ta' = 'en'): string => {
+  const v = COPY[key] as any;
+  if (!v) return code;
+  const item = v[code];
+  if (!item) return code;
+  return (item[lang] || item.en) as string;
 };
 
 export default function ProgressiveProfilePrompt({
@@ -94,8 +103,8 @@ export default function ProgressiveProfilePrompt({
         const value = patch.date_of_birth || '';
         return (
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-              <Cake className="w-4 h-4 text-[#0F6E56]" />
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Cake className="w-4 h-4 text-[#402970]" />
               {t('dob', lang)}
             </label>
             <input
@@ -103,7 +112,7 @@ export default function ProgressiveProfilePrompt({
               value={value}
               max={new Date().toISOString().split('T')[0]}
               onChange={(e) => setPatch(p => ({ ...p, date_of_birth: e.target.value }))}
-              className="w-full px-4 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+              className="w-full px-4 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
             />
             <p className="text-[11px] text-gray-500 leading-relaxed">
               Wasi will surprise you with a birthday gift idea a week before. 🎁
@@ -115,8 +124,8 @@ export default function ProgressiveProfilePrompt({
         const value = patch.city || '';
         return (
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-              <MapPin className="w-4 h-4 text-[#0F6E56]" />
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <MapPin className="w-4 h-4 text-[#402970]" />
               {t('city', lang)}
             </label>
             <input
@@ -124,7 +133,7 @@ export default function ProgressiveProfilePrompt({
               value={value}
               onChange={(e) => setPatch(p => ({ ...p, city: e.target.value }))}
               placeholder={t('cityPh', lang)}
-              className="w-full px-4 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+              className="w-full px-4 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
             />
           </div>
         );
@@ -134,8 +143,8 @@ export default function ProgressiveProfilePrompt({
         const value = patch.typical_recipient;
         return (
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-              <Users className="w-4 h-4 text-[#0F6E56]" />
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Users className="w-4 h-4 text-[#402970]" />
               {t('recipient', lang)}
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -144,10 +153,10 @@ export default function ProgressiveProfilePrompt({
                   key={code}
                   type="button"
                   onClick={() => setPatch(p => ({ ...p, typical_recipient: code }))}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
+                    className={`px-3 py-2.5 min-h-[40px] rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
                     value === code
-                      ? 'bg-[#0F6E56] text-white border-[#0F6E56] shadow-sm'
-                      : 'bg-white border-black/10 text-gray-600 hover:bg-[#E1F5EE] hover:border-[#0F6E56]/30'
+                      ? 'bg-[#402970] text-white border-[#402970] shadow-sm'
+                      : 'bg-white border-black/10 text-gray-600 hover:bg-[#EDE5F8] hover:border-[#402970]/30'
                   }`}
                 >
                   {t('recipientOpts', lang)[code]}
@@ -162,8 +171,8 @@ export default function ProgressiveProfilePrompt({
         const value = patch.gender;
         return (
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
-              <Sparkles className="w-4 h-4 text-[#0F6E56]" />
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Sparkles className="w-4 h-4 text-[#402970]" />
               {t('gender', lang)}
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -172,10 +181,10 @@ export default function ProgressiveProfilePrompt({
                   key={code}
                   type="button"
                   onClick={() => setPatch(p => ({ ...p, gender: code }))}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
+                    className={`px-3 py-2.5 min-h-[40px] rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
                     value === code
-                      ? 'bg-[#0F6E56] text-white border-[#0F6E56] shadow-sm'
-                      : 'bg-white border-black/10 text-gray-600 hover:bg-[#E1F5EE] hover:border-[#0F6E56]/30'
+                      ? 'bg-[#402970] text-white border-[#402970] shadow-sm'
+                      : 'bg-white border-black/10 text-gray-600 hover:bg-[#EDE5F8] hover:border-[#402970]/30'
                   }`}
                 >
                   {t('genderOpts', lang)[code]}
@@ -190,14 +199,14 @@ export default function ProgressiveProfilePrompt({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
       onClick={skipAll}
     >
       <div
-        className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden"
+        className="w-full sm:max-w-sm bg-white sm:rounded-2xl shadow-2xl overflow-hidden rounded-t-2xl sm:rounded-t-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] px-5 py-4 text-white">
+        <div className="relative bg-gradient-to-br from-violet-mid to-violet px-5 py-4 text-white">
           <button
             onClick={skipAll}
             className="absolute top-3 right-3 text-white/70 hover:text-white cursor-pointer p-1 rounded-full hover:bg-white/10 transition"
@@ -236,7 +245,7 @@ export default function ProgressiveProfilePrompt({
               type="button"
               onClick={() => advance(patch)}
               disabled={saving}
-              className="bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] text-white text-xs font-semibold px-4 py-2.5 rounded-xl cursor-pointer flex items-center gap-1.5 hover:from-[#0A5C45] hover:to-[#083D30] active:scale-95 disabled:opacity-60 transition shadow-md shadow-[#0F6E56]/20"
+              className="bg-gradient-to-br from-violet to-violet-deep text-white text-xs font-semibold px-4 py-2.5 min-h-[40px] rounded-xl cursor-pointer flex items-center gap-1.5 hover:from-violet-deep hover:to-violet-deep active:scale-95 disabled:opacity-60 transition shadow-md shadow-violet/20"
             >
               {saving ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -260,7 +269,7 @@ export default function ProgressiveProfilePrompt({
               <span
                 key={i}
                 className={`h-1 rounded-full transition-all ${
-                  i === step ? 'w-6 bg-[#0F6E56]' : 'w-1.5 bg-gray-300'
+                  i === step ? 'w-6 bg-[#402970]' : 'w-1.5 bg-gray-300'
                 }`}
               />
             ))}

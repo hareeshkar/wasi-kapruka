@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Gift, Cake, Sparkles, Plus, ImagePlus, Send, X, ShoppingBag, Smartphone, Heart } from 'lucide-react';
+import { Gift, Cake, Plus, ImagePlus, Send, X, ShoppingBag, Smartphone } from 'lucide-react';
 import type { Message } from '../types';
+import WasiRobot from './WasiRobot';
 
 interface EmptyStatePlaceholderProps {
   lang?: 'en' | 'si' | 'ta';
@@ -14,23 +15,44 @@ interface EmptyStatePlaceholderProps {
   onUpdateMessage?: (msgId: string, updates: Partial<Message>) => void;
 }
 
-// Rotating phrases for the subtitle
-const PHRASES = [
-  'the perfect gift',
-  'a birthday surprise',
-  'fresh groceries',
-  'the latest phone',
-  'a chocolate hamper',
-  'flowers & cakes',
-  'fashion & style',
-  'something special',
-];
+// Rotating phrases — equal-length arrays (same count required for safe lang-switch mid-rotation)
+const PHRASES: Record<'en' | 'si' | 'ta', string[]> = {
+  en: ['the perfect gift', 'a birthday surprise', 'fresh groceries', 'the latest phone', 'a chocolate hamper', 'flowers & cakes', 'fashion & style', 'something special'],
+  si: ['perfect gift එක', 'birthday surprise එකක්', 'fresh groceries ටිකක්', 'latest phone එක', 'chocolate hamper එකක්', 'flowers සහ cakes', 'fashion සහ style', 'special දෙයක්'],
+  ta: ['perfect பரிசு ஒண்டு', 'birthday surprise ஒண்டு', 'fresh காய்கறிகள்', 'latest phone ஒண்டு', 'chocolate hamper ஒண்டு', 'பூவும் cakeம்', 'fashion & style', 'special ஏதாவது'],
+};
+
+// UI copy — same L/t() pattern as ProductCard
+const L = {
+  eyebrow:      { en: 'Kapruka Shopping Bestie',               si: 'ඔයාගේ Kapruka Shopping Bestie',     ta: 'உங்கள் Kapruka Shopping நண்பன்' },
+  letsFind:     { en: "Let's find",                            si: 'හොයමු',                              ta: 'தேடலாம்' },
+  placeholder:  { en: 'Ask Wasi anything…',                    si: 'Wasi ගෙන් ඕනෑ දෙයක් අහන්න…',        ta: 'Wasi-கிட்ட எதுவும் கேளு…' },
+  signIn:       { en: 'Sign in to save your history',          si: 'History save කරන්න sign in වෙන්න',  ta: 'history save ஆக sign in பண்ணு' },
+  listening:    { en: 'Listening…',                            si: 'අහගෙන ඉන්නවා…',                     ta: 'கேக்குறேன்…' },
+  transcribing: { en: 'Transcribing…',                         si: 'Convert කරනවා…',                    ta: 'எழுதுறேன்…' },
+  micDenied:    { en: 'Mic access denied — check browser settings', si: 'Mic access නෑ — browser settings check කරන්න', ta: 'Mic access இல்ல — browser settings பாரு' },
+  hiName:       { en: 'Hi',                                    si: 'හායි',                               ta: 'ஹாய்' },
+  imWasi:       { en: "I'm Wasi",                              si: 'මම Wasi',                            ta: 'நான் Wasi' },
+};
+const t = (k: keyof typeof L, lang: 'en' | 'si' | 'ta') => L[k][lang] ?? L[k].en;
 
 const CARDS = [
-  { icon: Gift,     bg: 'rgba(244,114,182,0.10)', color: '#EC4899', title: 'Gifts & Hampers',       body: 'Curated bundles, wrapped & ready', query: 'Show me gift hampers from Kapruka' },
-  { icon: Cake,     bg: 'rgba(16,185,129,0.08)',  color: '#10B981', title: 'Cakes & Sweets',        body: 'Freshly baked, same-day delivery',  query: 'Show me cakes and sweets from Kapruka' },
-  { icon: Smartphone, bg: 'rgba(99,102,241,0.08)', color: '#6366F1', title: 'Electronics & Gadgets', body: 'Phones, laptops & accessories',     query: 'Show me electronics from Kapruka' },
-  { icon: ShoppingBag, bg: 'rgba(245,158,11,0.08)', color: '#F59E0B', title: 'Groceries & Essentials', body: 'Rice, dal, spices & more',         query: 'Show me groceries from Kapruka' },
+  {
+    icon: Gift, bg: 'rgba(244,114,182,0.10)', color: '#EC4899', query: 'Show me gift hampers from Kapruka',
+    copy: { en: { title: 'Gifts & Hampers', body: 'Curated bundles, wrapped & ready' }, si: { title: 'තෑගි සහ Hampers', body: 'Pack කරලා ready, deliver කරන්නත් ready' }, ta: { title: 'பரிசுகளும் Hamper-களும்', body: 'அழகாக wrap பண்ணி ready-யா இருக்கு' } },
+  },
+  {
+    icon: Cake, bg: 'rgba(16,185,129,0.08)', color: '#10B981', query: 'Show me cakes and sweets from Kapruka',
+    copy: { en: { title: 'Cakes & Sweets', body: 'Freshly baked, same-day delivery' }, si: { title: 'Cakes සහ Sweets', body: 'Fresh bake කරලා, same day deliver' }, ta: { title: 'Cakes & இனிப்புகள்', body: 'Fresh-ஆ bake பண்ணி, அன்றே deliver' } },
+  },
+  {
+    icon: Smartphone, bg: 'rgba(99,102,241,0.08)', color: '#6366F1', query: 'Show me electronics from Kapruka',
+    copy: { en: { title: 'Electronics & Gadgets', body: 'Phones, laptops & accessories' }, si: { title: 'Electronics සහ Gadgets', body: 'Phones, laptops සහ accessories' }, ta: { title: 'Electronics & Gadgets', body: 'Phone, laptop, accessories எல்லாமே' } },
+  },
+  {
+    icon: ShoppingBag, bg: 'rgba(245,158,11,0.08)', color: '#F59E0B', query: 'Show me groceries from Kapruka',
+    copy: { en: { title: 'Groceries & Essentials', body: 'Rice, dal, spices & more' }, si: { title: 'Groceries සහ Essentials', body: 'හාල්, පරිප්පු, කුළුබඩු සහ තවත්' }, ta: { title: 'Grocery & அத்தியாவசியங்கள்', body: 'அரிசி, பருப்பு, மசாலா இன்னும் நிறைய' } },
+  },
 ];
 
 const MAX_DIM = 800;
@@ -86,12 +108,18 @@ export default function EmptyStatePlaceholder({
     const interval = setInterval(() => {
       setPhraseVisible(false);
       setTimeout(() => {
-        setPhraseIndex(prev => (prev + 1) % PHRASES.length);
+        setPhraseIndex(prev => (prev + 1) % PHRASES.en.length);
         setPhraseVisible(true);
       }, 400);
     }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Reset phrase index when language switches to avoid undefined (arrays equal length, but reset for clean transition)
+  useEffect(() => {
+    setPhraseVisible(false);
+    setTimeout(() => { setPhraseIndex(0); setPhraseVisible(true); }, 300);
+  }, [lang]);
 
   // Voice
   type VoiceState = 'idle' | 'recording' | 'transcribing' | 'error';
@@ -249,21 +277,15 @@ export default function EmptyStatePlaceholder({
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center w-full max-w-[820px] px-6 animate-fadeInUp">
 
-        {/* Orb — breathing, floating */}
-        <div className="relative w-[72px] h-[72px] mb-8 group cursor-pointer" style={{ animation: 'orbFloat 4s ease-in-out infinite' }}>
-          <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-12 h-3 rounded-full orb-glow" style={{ background: 'rgba(139,92,246,0.25)', filter: 'blur(8px)' }} />
-          <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(135deg, #3b0764 0%, #7e22ce 40%, #a78bfa 70%, #c4b5fd 100%)', boxShadow: '0 16px 40px -8px rgba(139,92,246,0.30), 0 4px 12px rgba(64,41,112,0.12)' }} />
-          <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(ellipse at 28% 22%, rgba(255,255,255,0.75) 0%, transparent 45%)' }} />
-          <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.15) 100%)' }} />
-          <div className="absolute inset-0 rounded-full" style={{ boxShadow: 'inset -5px -5px 10px rgba(0,0,0,0.12), inset 5px 5px 10px rgba(255,255,255,0.35)' }} />
-        </div>
+        {/* 3D Wasi Robot — interactive, tracks mouse + text caret */}
+        <WasiRobot inputRef={inputRef} />
 
         {/* Greeting */}
-        <div className="text-center mb-9 px-4 py-3">
+        <div className="text-center mb-4 px-4 py-2">
           {/* Eyebrow */}
           <div className="flex items-center justify-center gap-2 mb-3 animate-fadeInUp" style={{ animationDelay: '0.1s' }}>
             <div className="h-px w-8" style={{ background: 'linear-gradient(to right, transparent, rgba(64,41,112,0.20))' }} />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'rgba(64,41,112,0.45)' }}>Kapruka Shopping Bestie</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'rgba(64,41,112,0.45)' }}>{t('eyebrow', lang)}</span>
             <div className="h-px w-8" style={{ background: 'linear-gradient(to left, transparent, rgba(64,41,112,0.20))' }} />
           </div>
 
@@ -271,49 +293,65 @@ export default function EmptyStatePlaceholder({
           <h1 className={`mb-2 animate-fadeInUp ${lang === 'si' ? 'font-sinhala font-bold text-2xl' : lang === 'ta' ? 'font-tamil font-bold text-2xl' : 'font-sans font-bold text-[32px] sm:text-[38px] tracking-tight'}`}
             style={{ color: '#1a1a2e', animationDelay: '0.2s' }}>
             {displayName ? (
-              <>Hi <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#6d28d9', fontStyle: 'italic' }}>{displayName}</span>, I'm Wasi</>
+              <>{t('hiName', lang)} <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#402970', fontStyle: 'italic' }}>{displayName}</span>, {t('imWasi', lang)}</>
             ) : (
-              <>Hi, I'm <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#6d28d9', fontStyle: 'italic' }}>Wasi</span></>
+              <>{t('hiName', lang)}, <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#402970', fontStyle: 'italic' }}>Wasi</span></>
             )}
           </h1>
 
           {/* Rotating subtitle */}
           <div className="flex items-center justify-center gap-2 flex-wrap animate-fadeInUp" style={{ animationDelay: '0.35s' }}>
             <span className={`text-[20px] sm:text-[24px] font-medium ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`} style={{ color: 'rgba(64,41,112,0.55)' }}>
-              Let's find
+              {t('letsFind', lang)}
             </span>
             <span className="inline-flex items-center overflow-visible relative" style={{ minWidth: '220px', paddingTop: '0.15em', paddingBottom: '0.15em', width: 'fit-content' }}>
               <span
                 className={`text-[20px] sm:text-[24px] font-semibold ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : 'font-display italic'}`}
                 style={{
-                  color: '#6d28d9',
+                  color: '#402970',
                   opacity: phraseVisible ? 1 : 0,
                   transform: phraseVisible ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.96)',
                   transition: 'opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
                 }}
               >
-                {PHRASES[phraseIndex]}
+                {PHRASES[lang][phraseIndex]}
               </span>
             </span>
           </div>
         </div>
 
         {/* Cards — 4 columns */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full mb-10">
-          {CARDS.map(({ icon: Icon, bg, color, title, body, query }, i) => (
-            <button
-              key={title}
-              onClick={() => handleCardClick(query)}
-              className="group text-left rounded-2xl p-4 transition-all duration-250 cursor-pointer border border-transparent hover:border-violet/8 active:scale-[0.97] animate-fadeInUp"
-              style={{ background: 'rgba(255,255,255,0.70)', backdropFilter: 'blur(8px)', boxShadow: '0 1px 4px rgba(0,0,0,0.03)', animationDelay: `${0.4 + i * 0.08}s` }}
-            >
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:scale-105" style={{ background: bg }}>
-                <Icon className="w-4 h-4" style={{ color }} />
-              </div>
-              <h3 className="text-[13px] font-semibold text-ink mb-0.5">{title}</h3>
-              <p className="text-[11px] font-medium leading-relaxed" style={{ color: 'rgba(64,41,112,0.45)' }}>{body}</p>
-            </button>
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 w-full mb-6 px-1">
+          {CARDS.map(({ icon: Icon, bg, color, query, copy }, i) => {
+            const c = copy[lang] ?? copy.en;
+            return (
+              <button
+                key={query}
+                onClick={() => handleCardClick(query)}
+                className="group text-left rounded-2xl p-3 sm:p-4 transition-all duration-300 cursor-pointer border border-transparent hover:border-violet/10 active:scale-[0.97] animate-fadeInUp flex flex-col"
+                style={{
+                  background: 'rgba(255,255,255,0.75)',
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: '0 2px 8px rgba(64,41,112,0.06), 0 1px 2px rgba(0,0,0,0.03)',
+                  animationDelay: `${0.4 + i * 0.10}s`,
+                  animationFillMode: 'both',
+                  minHeight: '120px',
+                }}
+              >
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center mb-2 sm:mb-3 transition-all duration-250 group-hover:-translate-y-1 group-hover:scale-110 group-hover:shadow-md" style={{ background: bg }}>
+                  <Icon className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color }} />
+                </div>
+                <h3
+                  className={`font-semibold text-ink mb-1.5 leading-snug break-words ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`}
+                  style={{ fontSize: 'clamp(12px, 2.8vw, 14px)', textWrap: 'balance' }}
+                >{c.title}</h3>
+                <p
+                  className={`font-medium leading-relaxed break-words line-clamp-2 ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`}
+                  style={{ fontSize: 'clamp(10px, 2.4vw, 12px)', color: 'rgba(64,41,112,0.45)', textWrap: 'balance' }}
+                >{c.body}</p>
+              </button>
+            );
+          })}
         </div>
 
         {/* Input Composer */}
@@ -321,19 +359,19 @@ export default function EmptyStatePlaceholder({
           {isRecording && (
             <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl mb-2.5" style={{ background: 'rgba(254,226,226,0.6)', border: '1px solid rgba(244,63,94,0.15)' }}>
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0" />
-              <span className="text-[12px] font-mono font-medium text-rose-600">Listening… {recSeconds}s</span>
+              <span className="text-[12px] font-mono font-medium text-rose-600">{t('listening', lang)} {recSeconds}s</span>
               <span className="text-[10px] text-rose-400 ml-auto font-mono">{MAX_REC_SECONDS - recSeconds}s</span>
             </div>
           )}
           {isTranscribing && (
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl mb-2.5" style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.10)' }}>
               <span className="w-2 h-2 rounded-full bg-violet animate-pulse" />
-              <span className="text-[12px] font-mono font-medium text-violet">Transcribing…</span>
+              <span className="text-[12px] font-mono font-medium text-violet">{t('transcribing', lang)}</span>
             </div>
           )}
           {isError && (
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl mb-2.5" style={{ background: 'rgba(254,226,226,0.6)', border: '1px solid rgba(244,63,94,0.15)' }}>
-              <span className="text-[12px] font-medium text-rose-600">Mic access denied — check browser settings</span>
+              <span className="text-[12px] font-medium text-rose-600">{t('micDenied', lang)}</span>
             </div>
           )}
 
@@ -372,7 +410,7 @@ export default function EmptyStatePlaceholder({
 
               <input ref={inputRef} type="text" value={inputText} onChange={(e) => setInputText(e.target.value)}
                 onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)}
-                placeholder={isRecording ? 'Listening…' : isTranscribing ? 'Transcribing…' : 'Ask Wasi anything…'}
+                placeholder={isRecording ? t('listening', lang) : isTranscribing ? t('transcribing', lang) : t('placeholder', lang)}
                 className={`flex-1 h-full bg-transparent px-3 text-[13.5px] text-ink outline-none placeholder:opacity-40 font-medium ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`}
               />
 
@@ -386,8 +424,8 @@ export default function EmptyStatePlaceholder({
                   style={isRecording
                     ? { background: 'linear-gradient(135deg, #DC3545 0%, #BD2130 100%)', boxShadow: '0 3px 10px rgba(220,53,69,0.30)' }
                     : hasContent
-                      ? { background: 'linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%)', boxShadow: '0 3px 10px rgba(109,40,217,0.25)' }
-                      : { background: 'linear-gradient(135deg, #6d28d9 0%, #7c3aed 50%, #a78bfa 100%)', boxShadow: '0 2px 8px rgba(109,40,217,0.18)' }
+                      ? { background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)', boxShadow: '0 3px 10px rgba(64,41,112,0.25)' }
+                      : { background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 50%, #2D1B69 100%)', boxShadow: '0 2px 8px rgba(64,41,112,0.18)' }
                   }>
                   {isRecording ? (
                     <div className="w-3 h-3 rounded-[2px] bg-white" style={{ animation: 'pulseViolet 1s ease-in-out infinite' }} />
@@ -407,7 +445,7 @@ export default function EmptyStatePlaceholder({
 
           {!isSignedIn && (
             <button onClick={onSignIn} className="mt-4 text-[11px] cursor-pointer block w-full text-center transition-colors font-medium" style={{ color: 'rgba(109,40,217,0.50)' }}>
-              Sign in to save your history
+              {t('signIn', lang)}
             </button>
           )}
         </div>

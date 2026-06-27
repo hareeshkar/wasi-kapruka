@@ -34,7 +34,7 @@ const COPY = {
   usePassword:    { en: 'Use password instead',   si: 'ඒ වෙනුවට මුරපදය',    ta: 'அதற்கு பதிலாக கடவுச்சொல்' },
   successMagic:   { en: 'Check your email! 📬 We sent a one-time sign-in link.', si: 'ඔබේ ඊමේල් පරීක්ෂා කරන්න! 📬 අපි එක් වරක් පිවිසුම් ලින්ක් එකක් යවා ඇත.', ta: 'உங்கள் மின்னஞ்சலைப் பாருங்கள்! 📬' },
   successSignup:  { en: 'Account created! Check your email to confirm before signing in.', si: 'ගිණුම සාදන ලදී! පිවිසෙන්න පෙර තහවුරු කිරීමට ඔබේ ඊමේල් පරීක්ෂා කරන්න.', ta: 'கணக்கு உருவாக்கப்பட்டது! உள்நுழைவதற்கு முன் உங்கள் மின்னஞ்சலை உறுதிப்படுத்தவும்.' },
-  tagline:        { en: 'Sign in to persist your gift history and get a personalized concierge.', si: 'ඔබේ තෑගි ඉතිහාසය පවත්වා ගැනීමට සහ පුද්ගලීකරණය කළ උපදෙස්කරුවෙකු ලබා ගැනීමට පිවිසෙන්න.', ta: 'உங்கள் பரிசு வரலாற்றை தக்கவைக்கவும், தனிப்பயனாக்கப்பட்ட துணைவனைப் பெறவும் உள்நுழையவும்.' },
+  tagline:        { en: 'Sign in to keep your history and get personalised picks from Wasi.', si: 'ඔබේ තෑගි ඉතිහාසය පවත්වා ගැනීමට සහ පුද්ගලීකරණය කළ උපදෙස්කරුවෙකු ලබා ගැනීමට පිවිසෙන්න.', ta: 'உங்கள் பரிசு வரலாற்றை தக்கவைக்கவும், தனிப்பயனாக்கப்பட்ட துணைவனைப் பெறவும் உள்நுழையவும்.' },
   englishLabel:   { en: 'English',                si: 'ඉංග්‍රීසි',          ta: 'ஆங்கிலம்' },
   sinhalaLabel:   { en: 'Sinhala',                si: 'සිංහල',             ta: 'சிங்களம்' },
   tamilLabel:     { en: 'Tamil',                  si: 'දෙමළ',              ta: 'தமிழ்' },
@@ -139,15 +139,15 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-white sm:rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-t-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header strip */}
-        <div className="relative bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] px-6 py-5 text-white">
+        <div className="relative bg-gradient-to-br from-[#402970] to-[#5B3E8A] px-6 py-5 text-white">
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-white/70 hover:text-white cursor-pointer p-1 rounded-full hover:bg-white/10 transition"
@@ -181,7 +181,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder={t('firstNamePh', lang)}
                   autoComplete="given-name"
-                  className="w-full px-3 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+                  className="w-full px-3 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
                 />
               </div>
               <div>
@@ -194,7 +194,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder={t('lastNamePh', lang)}
                   autoComplete="family-name"
-                  className="w-full px-3 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+                  className="w-full px-3 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
                 />
               </div>
             </div>
@@ -213,7 +213,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t('emailPh', lang)}
               autoComplete="email"
-              className="w-full px-4 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+              className="w-full px-4 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
             />
           </div>
 
@@ -232,7 +232,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t('passwordPh', lang)}
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                className="w-full px-4 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+                className="w-full px-4 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
               />
             </div>
           )}
@@ -250,10 +250,10 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                     key={code}
                     type="button"
                     onClick={() => setPreferredLang(code)}
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
+                    className={`px-3 py-2.5 min-h-[40px] rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
                       preferredLang === code
-                        ? 'bg-[#0F6E56] text-white border-[#0F6E56] shadow-sm'
-                        : 'bg-white border-black/10 text-gray-600 hover:bg-[#E1F5EE] hover:border-[#0F6E56]/30'
+                        ? 'bg-[#402970] text-white border-[#402970] shadow-sm'
+                        : 'bg-white border-black/10 text-gray-600 hover:bg-[#EDE5F8] hover:border-[#402970]/30'
                     }`}
                   >
                     {code === 'en' ? t('englishLabel', lang)
@@ -276,7 +276,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                 <button
                   type="button"
                   onClick={() => setShowDobWhy(s => !s)}
-                  className="text-[10px] text-[#0A5C45] hover:text-[#0F6E56] font-semibold cursor-pointer inline-flex items-center gap-0.5"
+                  className="text-[10px] text-[#5B3E8A] hover:text-[#402970] font-semibold cursor-pointer inline-flex items-center gap-0.5"
                   aria-label={t('dobWhy', lang)}
                 >
                   <HelpCircle className="w-3 h-3" />
@@ -288,10 +288,10 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                 value={dateOfBirth}
                 max={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setDateOfBirth(e.target.value)}
-                className="w-full px-4 py-3 bg-[#F7F5F1] border border-black/8 focus:border-[#0F6E56]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/10 transition"
+                className="w-full px-4 py-3 min-h-[44px] bg-surface-warm border border-ink/8 focus:border-violet/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet/10 transition"
               />
               {showDobWhy && (
-                <p className="mt-2 text-[11px] text-gray-600 leading-relaxed bg-[#E1F5EE]/60 border border-[#0F6E56]/15 rounded-lg px-3 py-2 animate-fade-in">
+                <p className="mt-2 text-[11px] text-gray-600 leading-relaxed bg-[#EDE5F8]/60 border border-[#402970]/15 rounded-lg px-3 py-2 animate-fade-in">
                   {t('dobWhyBody', lang)}
                 </p>
               )}
@@ -315,7 +315,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
           <button
             type="submit"
             disabled={status === 'sending' || status === 'success'}
-            className="w-full bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] hover:from-[#0A5C45] hover:to-[#083D30] text-white font-semibold py-3 rounded-xl cursor-pointer transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-[#0F6E56]/20"
+            className="w-full bg-gradient-to-br from-violet to-violet-deep hover:from-violet-deep hover:to-violet-deep text-white font-semibold py-3.5 min-h-[48px] rounded-xl cursor-pointer transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-violet/20"
           >
             {status === 'sending' ? (
               <>
@@ -352,7 +352,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                 <button
                   type="button"
                   onClick={() => switchMode('signup')}
-                  className="block w-full text-xs text-[#0A5C45] hover:text-[#0F6E56] font-semibold cursor-pointer"
+                  className="block w-full text-xs text-[#5B3E8A] hover:text-[#402970] font-semibold cursor-pointer"
                 >
                   {t('noAccount', lang)}
                 </button>
@@ -369,7 +369,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
               <button
                 type="button"
                 onClick={() => switchMode('signin')}
-                className="block w-full text-xs text-[#0A5C45] hover:text-[#0F6E56] font-semibold cursor-pointer"
+                className="block w-full text-xs text-[#5B3E8A] hover:text-[#402970] font-semibold cursor-pointer"
               >
                 {t('hasAccount', lang)}
               </button>

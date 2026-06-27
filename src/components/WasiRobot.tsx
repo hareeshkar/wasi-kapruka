@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 interface WasiRobotProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
@@ -24,18 +25,19 @@ const BODY_H = 0.55;
 
 // ── Tracking ─────────────────────────────────────────────────────────────
 const LERP_IDLE     = 0.04;
-const LERP_TRACK    = 0.16;
-const MAX_YAW       = Math.PI / 3.6;
-const MAX_PITCH     = Math.PI / 6.5;
-const MAX_ROLL      = 0.10;
+const LERP_TRACK    = 0.14;
+const MAX_YAW       = Math.PI / 5;    // 36° — balanced left/right
+const MAX_PITCH     = Math.PI / 6.5;  // ~28°
+const MAX_ROLL      = 0.06;
 const AWARENESS_R   = 550;
 const IDLE_MS       = 3500;
 const CARET_MS      = 1500;
+const TRACK_DIST    = 220;             // atan2 denominator — higher = less sensitive
 
 // ── Blink ────────────────────────────────────────────────────────────────
-const BLINK_MIN = 2800;
-const BLINK_MAX = 6500;
-const BLINK_DUR = 130;
+const BLINK_MIN = 2200;
+const BLINK_MAX = 5000;
+const BLINK_DUR = 110;
 
 // ── Caret mirror ─────────────────────────────────────────────────────────
 function getCaretX(el: HTMLInputElement): number {
@@ -56,7 +58,7 @@ function getCaretX(el: HTMLInputElement): number {
 
 // ── Material factory ─────────────────────────────────────────────────────
 const mat = (color: number, opts: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
-  new THREE.MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.7, ...opts });
+  new THREE.MeshStandardMaterial({ color, roughness: 0.30, metalness: 0.50, ...opts });
 
 // ═════════════════════════════════════════════════════════════════════════
 export default function WasiRobot({ inputRef }: WasiRobotProps) {
@@ -368,18 +370,24 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
     el.appendChild(r.domElement);
     rRef.current = r;
 
-    // Lighting — warm key, cool fill, rim for background separation
-    scene.add(new THREE.AmbientLight(0xffffff, 0.50));
+    // Env map — gives metals soft gradient reflections without washing out
+    const pmrem = new THREE.PMREMGenerator(r);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.10; // low enough to not wash out, enough to give sheen
+    pmrem.dispose();
 
-    const key = new THREE.DirectionalLight(0xFFF8F0, 1.0);
+    // Lighting — warm key, violet fill, white rim
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+
+    const key = new THREE.DirectionalLight(0xFFF8F0, 1.3);
     key.position.set(5, 6, 4);
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0xDDE4FF, 0.45);
+    const fill = new THREE.DirectionalLight(0xEEE8FF, 0.50);
     fill.position.set(-4, 2, 1);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight(0xffffff, 0.35);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.40);
     rim.position.set(0, -2, -4);
     scene.add(rim);
 
@@ -439,7 +447,9 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
       s.my = r.top + r.height / 2;
     };
     (['input','keyup','click','focus'] as const).forEach(e => inp.addEventListener(e, up));
-    return () => (['input','keyup','click','focus'] as const).forEach(e => inp.removeEventListener(e, up));
+    return () => {
+      (['input','keyup','click','focus'] as const).forEach(e => inp.removeEventListener(e, up));
+    };
   }, [inputRef]);
 
   // ── Animation ─────────────────────────────────────────────────────────
@@ -482,40 +492,45 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
       let lerp = LERP_IDLE;
 
       if (s.mode === 'idle') {
-        s.tRotY = Math.sin(t * 0.4) * 0.18;
-        s.tRotX = Math.cos(t * 0.6) * 0.06 + 0.03;
+        // Gentle idle drift — balanced sine
+        s.tRotY = Math.sin(t * 0.45) * 0.08;
+        s.tRotX = Math.cos(t * 0.55) * 0.04;
         lerp = LERP_IDLE;
       } else {
+        // Symmetric tracking — same formula for mouse and caret
         const cr = r.domElement.getBoundingClientRect();
         const cx = cr.left + cr.width / 2;
         const cy = cr.top + cr.height / 2;
-        s.tRotY = THREE.MathUtils.clamp(Math.atan2(s.mx - cx, 170), -MAX_YAW, MAX_YAW);
-        s.tRotX = THREE.MathUtils.clamp(Math.atan2(s.my - cy, 170), -MAX_PITCH, MAX_PITCH);
+        s.tRotY = THREE.MathUtils.clamp(Math.atan2(s.mx - cx, TRACK_DIST), -MAX_YAW, MAX_YAW);
+        s.tRotX = THREE.MathUtils.clamp(Math.atan2(s.my - cy, TRACK_DIST), -MAX_PITCH, MAX_PITCH);
         lerp = LERP_TRACK;
       }
 
       s.cRotY += (s.tRotY - s.cRotY) * lerp;
       s.cRotX += (s.tRotX - s.cRotX) * lerp;
 
-      // Roll
+      // Subtle roll on turn velocity
       const delta = s.tRotY - s.cRotY;
-      const tRoll = THREE.MathUtils.clamp(-delta * 0.35, -MAX_ROLL, MAX_ROLL);
+      const tRoll = THREE.MathUtils.clamp(-delta * 0.3, -MAX_ROLL, MAX_ROLL);
       s.cRotZ += (tRoll - s.cRotZ) * 0.08;
 
       head.rotation.set(s.cRotX, s.cRotY, s.cRotZ);
 
-      // Antenna spring
+      // Antenna spring + idle sway
       if (ant) {
-        const ay = (s.cRotY - prevY) * 2.0;
-        const ax = (s.cRotX - prevX) * 2.0;
-        s.aVy += -ay - s.aRy * 0.10 - s.aVy * 0.12;
-        s.aVx += -ax - s.aRx * 0.10 - s.aVx * 0.12;
+        const ay = (s.cRotY - prevY) * 2.5;
+        const ax = (s.cRotX - prevX) * 2.5;
+        s.aVy += -ay - s.aRy * 0.12 - s.aVy * 0.14;
+        s.aVx += -ax - s.aRx * 0.12 - s.aVx * 0.14;
         s.aRy += s.aVy; s.aRx += s.aVx;
-        ant.rotation.set(s.aRx, 0, s.aRy);
+        const idleSway = s.mode === 'idle' ? Math.sin(t * 0.7)        * 0.10 : 0;
+        const idleNod  = s.mode === 'idle' ? Math.sin(t * 0.55 + 1.2) * 0.05 : 0;
+        ant.rotation.set(s.aRx + idleNod, 0, s.aRy + idleSway);
       }
 
-      // Body bob
-      robot.position.y = s.mode === 'idle' ? Math.sin(t * 1.3) * 0.04 : robot.position.y * 0.92;
+      // Organic breathing bob — primary + second harmonic for natural feel
+      const breathe = Math.sin(t * 0.9) * 0.055 + Math.sin(t * 1.8) * 0.015;
+      robot.position.y = s.mode === 'idle' ? breathe : robot.position.y * 0.92;
 
       // Eye parallax + blink
       if (eL && eR) {
@@ -529,15 +544,20 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
           const sq = Math.max(0.05, p < 0.5 ? 1 - p * 1.9 : (p - 0.5) * 1.9 + 0.05);
           eL.scale.y = sq; eR.scale.y = sq;
         } else {
-          eL.scale.y += (1 - eL.scale.y) * 0.22;
-          eR.scale.y += (1 - eR.scale.y) * 0.22;
+          // Slow curiosity squint in idle — barely perceptible widening/narrowing
+          const squint = s.mode === 'idle' ? 1.0 + Math.sin(t * 0.28) * 0.07 : 1.0;
+          const eRate = eL.scale.y < 0.5 ? 0.22 : 0.05; // fast post-blink recovery, slow idle
+          eL.scale.y += (squint - eL.scale.y) * eRate;
+          eR.scale.y += (squint - eR.scale.y) * eRate;
         }
       }
 
-      // Core pulse
+      // Core pulse — punchy peak with pow² shaping, faster when typing
       if (core) {
+        const freq = s.mode === 'caret' ? 5.0 : 1.8;
+        const pulse = Math.pow(Math.max(0, Math.sin(t * freq)), 2) * 0.7;
         (core.material as THREE.MeshStandardMaterial).emissiveIntensity =
-          1.5 + Math.sin(t * (s.mode === 'caret' ? 6 : 2.5)) * 0.5 + (s.near ? 0.8 : 0);
+          1.2 + pulse + (s.near ? 0.4 : 0);
       }
 
       // Antenna tip pulse
@@ -561,8 +581,8 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
   }, []);
 
   return (
-    <div ref={box} className="mb-3"
-      style={{ width: 240, height: 280, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+    <div ref={box} className="mb-1"
+      style={{ width: 200, height: 220, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
     />
   );
 }

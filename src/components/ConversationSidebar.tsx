@@ -18,9 +18,9 @@ interface ConversationSidebarProps {
 
 const COPY = {
   newChat:  { en: 'New chat',     si: 'නව කතාබහ',   ta: 'புதிய அரட்டை' },
-  empty:    { en: 'No conversations yet.\nStart a new gift journey!',
-              si: 'තවම කතාබහක් නැත.\nනව තෑගි ගමනක් ආරම්භ කරන්න!',
-              ta: 'இன்னும் உரையாடல்கள் இல்லை.\nஒரு புதிய பரிசு பயணத்தைத் தொடங்குங்கள்!' },
+  empty:    { en: 'No conversations yet.\nAsk Wasi for anything!',
+              si: 'තවම කතාබහක් නැත.\nවාසිගෙන් ඕනෑ දෙයක් අහන්න!',
+              ta: 'இன்னும் உரையாடல்கள் இல்லை.\nவாசியிடம் எதையும் கேளுங்கள்!' },
   deleting: { en: 'Delete',        si: 'මකන්න',       ta: 'நீக்கு' },
   cancel:   { en: 'Cancel',        si: 'අවලංගු කරන්න', ta: 'ரத்து' },
   confirm:  { en: 'Delete this conversation?',
@@ -58,14 +58,16 @@ export default function ConversationSidebar({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Start collapsed on mobile — a 288px fixed sidebar eats the whole phone screen.
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+  );
 
-  // Refresh when sidebar opens (in case title was generated while it was closed)
+  // Refresh on mount so server-generated titles are visible immediately
   useEffect(() => {
-    if (open) onRefresh();
-  }, [open, onRefresh]);
-
-  if (!open) return null;
+    onRefresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNew = async () => {
     setCreating(true);
@@ -89,30 +91,36 @@ export default function ConversationSidebar({
     if (ok) setConfirmDelete(null);
   };
 
+  const confirmClearAllAction = async () => {
+    setClearing(true);
+    const ok = await onClearAll();
+    setClearing(false);
+    if (ok) setConfirmClearAll(false);
+  };
+
   return (
     <>
       {/* Sidebar — persistent column on the left, just like header/footer.
           On mobile, it collapses to a slide-in drawer. */}
       <aside
         className={`${collapsed ? 'w-12' : 'w-72'} flex-shrink-0 flex flex-col
-                   bg-white/80 backdrop-blur-md
-                   border-r border-black/5
-                   self-stretch transition-all duration-200`}
+                   glass-panel border-r-0
+                   self-stretch transition-all duration-300 ease-out`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-black/5 flex-shrink-0">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-[#C9A84C]/15 flex-shrink-0">
+          <div className={`flex items-center gap-2 ${collapsed ? 'hidden' : ''}`}>
             <Sparkles className="w-4 h-4 text-[#C9A84C]" />
-            <span className="text-xs font-mono font-bold tracking-widest uppercase text-[#0A5C45]">
+            <span className="text-xs font-mono font-bold tracking-[0.18em] uppercase text-[#5B3E8A]">
               {user ? 'Your chats' : 'Wasi'}
             </span>
           </div>
           <button
             onClick={() => setCollapsed(c => !c)}
-            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
+            className="text-[#5B3E8A]/50 hover:text-[#5B3E8A] p-1.5 rounded-full hover:bg-[#402970]/8 transition cursor-pointer"
             aria-label="Toggle sidebar"
           >
-            <ChevronLeft className={`w-4 h-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+            <ChevronLeft className={`w-4 h-4 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
@@ -123,7 +131,7 @@ export default function ConversationSidebar({
           <button
             onClick={handleNew}
             disabled={creating}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] hover:from-[#0A5C45] hover:to-[#083D30] text-white text-sm font-semibold py-2.5 rounded-xl cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-violet to-violet-deep hover:from-violet-deep hover:to-violet-deep text-white text-sm font-semibold py-2.5 min-h-[44px] rounded-xl cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             <span>{t('newChat', lang)}</span>
@@ -150,15 +158,15 @@ export default function ConversationSidebar({
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => onSelect(c.id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(c.id); }}
-                      className={`w-full text-left px-3 py-2.5 rounded-xl group transition-all flex items-start gap-2 ${
+                      onClick={() => { if (c.id !== activeId) onSelect(c.id); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && c.id !== activeId) onSelect(c.id); }}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl group transition-all cursor-pointer flex items-start gap-2 ${
                         isActive
-                          ? 'bg-[#E1F5EE] text-[#0A5C45] shadow-sm'
-                          : 'hover:bg-gray-50 text-gray-700'
+                          ? 'bg-gradient-to-r from-[#EBF4F0] to-[#F2F8F5] text-[#5B3E8A] shadow-sm border border-[#402970]/10'
+                          : 'hover:bg-white/70 text-gray-700 border border-transparent'
                       } ${isDeleting ? 'opacity-50' : ''}`}
                     >
-                      <MessageSquare className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${isActive ? 'text-[#0F6E56]' : 'text-gray-400'}`} />
+                      <MessageSquare className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${isActive ? 'text-[#402970]' : 'text-gray-400'}`} />
                       <div className="flex-1 min-w-0">
                         <div className={`text-sm leading-snug line-clamp-2 ${isActive ? 'font-semibold' : 'font-medium'}`}>
                           {c.title || 'New conversation'}
@@ -204,6 +212,46 @@ export default function ConversationSidebar({
         </div>
         )}
       </aside>
+
+      {/* Clear-all confirmation modal — was missing entirely; the button silently no-oped */}
+      {confirmClearAll && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+          onClick={() => !clearing && setConfirmClearAll(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 text-rose-600 mb-2">
+              <Trash2 className="w-4 h-4" />
+              <span className="text-[10px] font-mono font-bold tracking-widest uppercase">
+                {t('clearAllTitle', lang)}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              {t('clearAllBody', lang)}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmClearAll(false)}
+                disabled={clearing}
+                className="px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
+              >
+                {t('cancel', lang)}
+              </button>
+              <button
+                onClick={confirmClearAllAction}
+                disabled={clearing}
+                className="px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {clearing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                {clearing ? t('clearing', lang) : t('confirmClear', lang)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation modal */}
       {confirmDelete && (

@@ -51,9 +51,9 @@ export default function UserMenu({ lang = 'en', onOpenProfilePrompt }: UserMenuP
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 bg-white border border-black/8 hover:border-[#0F6E56]/30 px-2 py-1.5 rounded-full cursor-pointer transition-all shadow-xs active:scale-95"
+        className="flex items-center gap-2 bg-white border border-black/8 hover:border-[#402970]/30 px-2 py-1.5 rounded-full cursor-pointer transition-all shadow-xs active:scale-95"
       >
-        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#0F6E56] to-[#0A5C45] flex items-center justify-center text-white text-[10px] font-bold">
+        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#402970] to-[#5B3E8A] flex items-center justify-center text-white text-[10px] font-bold">
           {initials}
         </span>
         <span className="hidden sm:inline text-[11px] font-semibold text-[#1A1A1A] max-w-[100px] truncate">
@@ -65,7 +65,7 @@ export default function UserMenu({ lang = 'en', onOpenProfilePrompt }: UserMenuP
       {open && (
         <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-black/5 overflow-hidden z-40 animate-fade-in">
           {/* Header */}
-          <div className="px-4 py-3 bg-gradient-to-br from-[#E1F5EE] to-white border-b border-black/5">
+          <div className="px-4 py-3 bg-gradient-to-br from-[#EDE5F8] to-white border-b border-black/5">
             <p className="text-[11px] text-gray-500 font-mono uppercase tracking-wider">
               {t('greeting', lang)}{firstName || ''}
             </p>
@@ -105,7 +105,7 @@ export default function UserMenu({ lang = 'en', onOpenProfilePrompt }: UserMenuP
                   setOpen(false);
                   onOpenProfilePrompt();
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#0A5C45] hover:bg-[#E1F5EE] cursor-pointer transition text-left"
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#5B3E8A] hover:bg-[#EDE5F8] cursor-pointer transition text-left"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <div className="flex flex-col">

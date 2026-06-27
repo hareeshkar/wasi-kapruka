@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CartItem, City, DeliveryCheckResult, Order, OrderIntent } from '../types';
-import { ShoppingBag, MapPin, Calendar, User, Phone, FileText, CheckCircle2, Ticket, AlertCircle, RefreshCw, Sparkles, Trash2, Smartphone, Gift, Clock, Share2 } from 'lucide-react';
+import { ShoppingBag, MapPin, Calendar, User, Phone, FileText, CheckCircle2, Ticket, AlertCircle, RefreshCw, Sparkles, Trash2, Smartphone, Gift, Clock, Share2, Home, Building2, Briefcase, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { KaprukaLogo } from '../lib/kapruka';
+import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
 
 const ROLE_WORDS = new Set(['amma','akka','nangi','malli','aiya','wife','husband','machan','daughter','son','friend','girlfriend','boyfriend','sister','brother','mother','father','mom','dad','grandma','grandpa']);
 
@@ -24,6 +26,11 @@ interface CartDrawerProps {
     gift_message: string;
     icing_text?: string;
     sender_name?: string;
+    location_type?: string;
+    delivery_instructions?: string;
+    anonymous?: boolean;
+    currency?: string;
+    order_mode?: string;
   }) => void;
   isOrdering: boolean;
   orderResult: Order | null;
@@ -52,6 +59,14 @@ export default function CartDrawer({
   const [giftMessage, setGiftMessage] = useState('');
   const [icingText, setIcingText] = useState('');
   const [senderName, setSenderName] = useState('');
+
+  // New MCP fields
+  const [orderMode, setOrderMode] = useState<'gift' | 'self'>('gift');
+  const [locationType, setLocationType] = useState<'house' | 'apartment' | 'office' | 'other'>('house');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
+  const [anonymous, setAnonymous] = useState(false);
+  const [currency, setCurrency] = useState('LKR');
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   // City lookup states
   const [cityQuery, setCityQuery] = useState('');
@@ -152,6 +167,10 @@ export default function CartDrawer({
     if (prev.gift_message && !giftMessage) setGiftMessage(prev.gift_message);
     if (prev.sender_name && !senderName) setSenderName(prev.sender_name);
     if (prev.delivery_date) setDeliveryDate(prev.delivery_date);
+    if (prev.location_type) setLocationType(prev.location_type);
+    if (prev.delivery_instructions && !deliveryInstructions) setDeliveryInstructions(prev.delivery_instructions);
+    if (prev.anonymous !== undefined) setAnonymous(prev.anonymous);
+    if (prev.order_mode) setOrderMode(prev.order_mode);
     // Trigger city search
     if (prev.city_name && !selectedCity) {
       cityFromIntent.current = true;
@@ -204,7 +223,9 @@ export default function CartDrawer({
         setDeliveryError('Delivery lookup failed. Proceeding with simulation rates.');
         setDeliveryResult({
           available: true,
+          rate: 0,
           delivery_fee: 0,
+          currency: 'LKR',
           perishable_warning: isPerishable,
           notes: 'Rates not available — continuing.'
         });
@@ -220,6 +241,7 @@ export default function CartDrawer({
   useEffect(() => {
     if (!orderResult) return;
     const expiresMs = new Date(orderResult.expires_at).getTime();
+    if (isNaN(expiresMs)) { setTimeLeft(0); return; }
     const interval = setInterval(() => {
       const now = Date.now();
       const diffSecs = Math.floor((expiresMs - now) / 1000);
@@ -240,9 +262,13 @@ export default function CartDrawer({
     setCitiesList([]);
   };
 
+  // Mirrors the MCP server's own phone regex (orders.py _PHONE_RE) so we never
+  // submit a phone Kapruka will bounce: E.164 (+9477…) or local SL (077…) forms.
+  const isValidPhone = (p: string) => /^[+\d][\d\s\-()]{6,30}$/.test(p.trim());
+
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCity || !deliveryDate || cart.length === 0 || recipientPhone.length < 9) return;
+    if (!selectedCity || !deliveryDate || cart.length === 0 || !isValidPhone(recipientPhone)) return;
     onConfirmOrder({
       name: recipientName,
       phone: recipientPhone,
@@ -250,9 +276,14 @@ export default function CartDrawer({
       city_name: selectedCity.name,
       delivery_date: deliveryDate,
       address: deliveryAddress,
-      gift_message: giftMessage,
+      gift_message: orderMode === 'self' ? '' : giftMessage,
       icing_text: icingText || undefined,
-      sender_name: senderName || undefined,
+      sender_name: orderMode === 'self' ? recipientName : (senderName || undefined),
+      location_type: locationType,
+      delivery_instructions: deliveryInstructions || undefined,
+      anonymous: orderMode === 'self' ? false : anonymous,
+      currency,
+      order_mode: orderMode,
       // sender_email omitted: MCP rejects it; Kapruka collects email at checkout
     });
   };
@@ -261,17 +292,17 @@ export default function CartDrawer({
   const getLoc = (token: string) => {
     const list: Record<string, Record<string, string>> = {
       title: { en: 'Your Gift Bundle', si: 'ඔබේ තෑගි කුඩය', ta: 'பரிசுத் தொகுப்பு' },
-      empty: { en: 'No gifts added. Consult Wasi to start your bundle!', si: 'පෙට්ටිය හිස්ව පවතී. පළමු තෑග්ග තෝරන්න!', ta: 'வெறுமையாக உள்ளது.' },
+      empty: { en: 'Your Gift Bundle is empty — ask Wasi to find something!', si: 'පෙට්ටිය හිස්ව පවතී. පළමු තෑග්ග තෝරන්න!', ta: 'வெறுமையாக உள்ளது.' },
       sub: { en: 'Item Subtotal', si: 'තෑගි වටිනාකම', ta: 'பொருட்கள் தொகை' },
       delivery: { en: 'Kapruka Delivery Cost', si: 'බෙදාහැරීමේ ගාස්තුව', ta: 'வழங்கல் கட்டணம்' },
-      total: { en: 'Estimated Total LKR', si: 'මුළු එකතුව LKR', ta: 'மொத்த மதிப்பு LKR' },
+      total: { en: `Estimated Total ${currency}`, si: `මුළු එකතුව ${currency}`, ta: `மொத்த மதிப்பு ${currency}` },
       perish: {
         en: '⚠️ Fresh product (cake/flowers) requires Same-Day/Next-Day constraint.',
         si: '⚠️ නැවුම් තෑගි (කේක්/මල්) අද හෝ හෙට දිනට පමණක් සීමා වේ.',
         ta: '⚠️ புதிய மலர்கள்/கேக் இன்றோ அல்லது நாளையோ மட்டுமே கிடைக்கும்.'
       },
-      gateHeader: { en: 'DELIVERY VALIDATION GATE', si: 'බෙදාහැරීම් තහවුරු කිරීම', ta: 'வழங்கல் சரிபார்ப்பு' },
-      formHeader: { en: 'GUEST RECIPIENT LOGISTICS', si: 'ලබන්නාගේ විස්තර', ta: 'பெறுநர் விபரங்கள்' }
+      gateHeader: { en: 'Where & When', si: 'බෙදාහැරීම් තහවුරු කිරීම', ta: 'வழங்கல் சரிபார்ப்பு' },
+      formHeader: { en: 'Who It Goes To', si: 'ලබන්නාගේ විස්තර', ta: 'பெறுநர் விபரங்கள்' }
     };
     return list[token]?.[lang] || list[token]?.['en'];
   };
@@ -292,12 +323,12 @@ export default function CartDrawer({
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-black/5 shadow-md p-4 md:p-6 space-y-6 h-[78vh] overflow-y-auto relative animate-fade-in select-none text-[#1A1A1A]">
+    <div className="bg-white sm:rounded-2xl border border-black/5 shadow-md p-4 md:p-6 space-y-6 h-full overflow-y-auto relative animate-fade-in select-none text-ink">
       
       {/* Title */}
       <div className="flex items-center justify-between pb-3 border-b border-black/5">
         <div className="flex items-center gap-2 text-[#1A1A1A]">
-          <ShoppingBag className="w-5 h-5 text-[#0F6E56]" />
+          <ShoppingBag className="w-5 h-5 text-[#402970]" />
           <h2 className={`font-display font-bold text-base ${lang === 'si' ? 'font-sinhala' : ''}`}>
             {getLoc('title')}
           </h2>
@@ -314,18 +345,32 @@ export default function CartDrawer({
 
       {/* Cart Items List */}
       {cart.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-          <div className="w-12 h-12 bg-[#FAF8F4] text-[#0F6E56]/40 rounded-2xl flex items-center justify-center border border-black/5">
-            <ShoppingBag className="w-6 h-6" />
-          </div>
-          <p className={`text-xs text-[#6B6B6B] max-w-[200px] leading-relaxed ${lang === 'si' ? 'font-sinhala' : ''}`}>
+        <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+          {/* Hand-drawn lotus — custom Ceylon mark, breathes slowly */}
+          <svg width="72" height="56" viewBox="0 0 72 56" fill="none" className="opacity-80">
+            <g className="leaf-sway" style={{ transformOrigin: '36px 52px' }}>
+              {/* outer petals */}
+              <path d="M36 50 C20 44 10 30 12 16 C24 22 32 32 36 50Z" fill="#402970" opacity="0.14"/>
+              <path d="M36 50 C52 44 62 30 60 16 C48 22 40 32 36 50Z" fill="#402970" opacity="0.14"/>
+              {/* mid petals */}
+              <path d="M36 50 C26 40 22 26 26 12 C34 20 38 34 36 50Z" fill="#402970" opacity="0.32"/>
+              <path d="M36 50 C46 40 50 26 46 12 C38 20 34 34 36 50Z" fill="#402970" opacity="0.32"/>
+              {/* center petal */}
+              <path d="M36 50 C31 36 31 20 36 6 C41 20 41 36 36 50Z" fill="#5B3E8A" opacity="0.85"/>
+              {/* champagne dew drop */}
+              <circle cx="36" cy="22" r="2.4" fill="#C9A84C"/>
+            </g>
+            {/* water line */}
+            <path d="M14 52 Q24 49 36 52 T58 52" stroke="#C9A84C" strokeWidth="1.4" strokeLinecap="round" opacity="0.5" fill="none"/>
+          </svg>
+          <p className={`text-xs text-[#6B6B6B] max-w-[210px] leading-relaxed ${lang === 'si' ? 'font-sinhala' : ''}`}>
             {getLoc('empty')}
           </p>
         </div>
       ) : (
         <div className="space-y-4 max-h-48 overflow-y-auto pr-1">
           {cart.map((item, index) => (
-            <div key={`${item.product_code}-${index}`} className="flex items-center gap-3 bg-[#FAF8F4]/30 p-2 rounded-xl border border-black/5 hover:border-[#0F6E56]/20 transition-all group shadow-xs">
+            <div key={`${item.product_code}-${index}`} className="flex items-center gap-3 bg-[#FAF8F4]/30 p-2 rounded-xl border border-black/5 hover:border-[#402970]/20 transition-all group shadow-xs">
               <img
                 src={item.image_url}
                 alt={item.name}
@@ -337,27 +382,27 @@ export default function CartDrawer({
                   {item.name}
                 </p>
                 {item.variant_name && (
-                  <span className="text-[10px] font-mono text-[#0F6E56] font-bold">
+                  <span className="text-[10px] font-mono text-[#402970] font-bold">
                     Variant: {item.variant_name}
                   </span>
                 )}
                 <p className="text-[10px] font-mono text-gray-400">
-                  Rs. {item.price_lkr.toLocaleString()} LKR
+                  {formatPrice(item.price_lkr, detectCurrency(item) as Currency)}
                 </p>
               </div>
 
               {/* Quantity Changer */}
-              <div className="flex items-center gap-2 bg-[#FAF8F4] border border-black/5 rounded-lg p-1 select-none">
+              <div className="flex items-center gap-2 bg-surface-warm border border-ink/5 rounded-lg p-1 select-none">
                 <button
                   onClick={() => onUpdateQty(item.product_code, item.quantity - 1)}
-                  className="w-4 h-4 text-xs font-bold text-gray-500 hover:text-gray-900 cursor-pointer flex items-center justify-center"
+                  className="w-7 h-7 min-w-[32px] min-h-[32px] text-xs font-bold text-ink-muted hover:text-ink cursor-pointer flex items-center justify-center rounded"
                 >
                   -
                 </button>
-                <span className="text-[10px] font-mono font-bold text-gray-800">{item.quantity}</span>
+                <span className="text-[10px] font-mono font-bold text-ink min-w-[16px] text-center">{item.quantity}</span>
                 <button
                   onClick={() => onUpdateQty(item.product_code, item.quantity + 1)}
-                  className="w-4 h-4 text-xs font-bold text-gray-500 hover:text-gray-900 cursor-pointer flex items-center justify-center"
+                  className="w-7 h-7 min-w-[32px] min-h-[32px] text-xs font-bold text-ink-muted hover:text-ink cursor-pointer flex items-center justify-center rounded"
                 >
                   +
                 </button>
@@ -379,7 +424,7 @@ export default function CartDrawer({
       {cart.length > 0 && (
         <div className="bg-[#FAF8F4] border border-black/5 rounded-2xl p-4 space-y-4">
           <div className="flex items-center gap-1.5 border-b border-black/5 pb-2">
-            <MapPin className="w-4 h-4 text-[#0F6E56]" />
+            <MapPin className="w-4 h-4 text-[#402970]" />
             <span className={`text-[11px] font-mono font-bold text-gray-500 uppercase tracking-widest ${lang === 'si' ? 'font-sinhala' : ''}`}>
               {getLoc('gateHeader')}
             </span>
@@ -388,7 +433,7 @@ export default function CartDrawer({
           {/* Fuzzy City Typeahead Area */}
           <div className="space-y-1 relative">
             <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider block">
-              1. Delivery City (කොළඹ / මහනුවර etc)
+              Delivery City <span className="normal-case font-sinhala">(කොළඹ / මහනුවර OK)</span>
             </label>
             <input
               type="text"
@@ -398,11 +443,11 @@ export default function CartDrawer({
                 if (selectedCity) setSelectedCity(null);
               }}
               placeholder="Start typing city name..."
-              className="w-full bg-white border border-black/5 focus:border-[#0F6E56]/45 rounded-xl px-3 py-2 text-xs focus:outline-none placeholder-gray-400 text-[#1A1A1A]"
+                className="w-full bg-white border border-ink/5 focus:border-violet/40 rounded-xl px-3 py-2.5 min-h-[44px] text-xs focus:outline-none placeholder-ink-faint text-ink"
             />
             {isCitySearching && (
-              <span className="absolute top-7 right-2 text-[10px] font-mono text-[#0F6E56] animate-pulse">
-                SUGGESTING...
+              <span className="absolute top-7 right-2 text-[10px] font-mono text-[#402970] animate-pulse">
+                Searching…
               </span>
             )}
 
@@ -413,7 +458,7 @@ export default function CartDrawer({
                   <button
                     key={city.code}
                     onClick={() => handleCityPick(city)}
-                    className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-[#E1F5EE] hover:text-[#0F6E56] text-gray-700 font-mono flex justify-between items-center cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-[#EDE5F8] hover:text-[#402970] text-gray-700 font-mono flex justify-between items-center cursor-pointer"
                   >
                     <span>{city.name}</span>
                     <span className="text-[10px] text-gray-400">{city.code}</span>
@@ -423,9 +468,9 @@ export default function CartDrawer({
             )}
             
             {selectedCity && (
-              <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100/50 text-[11px] text-[#0F6E56] font-mono flex items-center justify-between">
+              <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100/50 text-[11px] text-[#402970] font-mono flex items-center justify-between">
                 <span>✓ Verified: {selectedCity.name}</span>
-                <span className="bg-[#0F6E56] text-white px-1.5 py-0.5 rounded text-[9px] font-bold">
+                <span className="bg-[#402970] text-white px-1.5 py-0.5 rounded text-[9px] font-bold">
                   {selectedCity.code}
                 </span>
               </div>
@@ -435,13 +480,13 @@ export default function CartDrawer({
           {/* Date Picker Constraint */}
           <div className="space-y-1">
             <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider block">
-              2. Delivery Date
+              Delivery Date
             </label>
             <input
               type="date"
               value={deliveryDate}
               onChange={(e) => setDeliveryDate(e.target.value)}
-              className="w-full bg-white border border-black/5 focus:border-[#0F6E56]/40 rounded-xl px-3 py-2 text-xs focus:outline-none placeholder-gray-400 text-[#1A1A1A]"
+              className="w-full bg-white border border-black/5 focus:border-[#402970]/40 rounded-xl px-3 py-2 text-xs focus:outline-none placeholder-gray-400 text-[#1A1A1A]"
               min={new Date().toISOString().split('T')[0]}
               max={new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]}
             />
@@ -463,15 +508,15 @@ export default function CartDrawer({
             <div className="pt-2 border-t border-black/5 flex items-center justify-between text-xs">
               {isCheckingDelivery ? (
                 <span className="text-gray-400 font-mono flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin text-[#0F6E56]" /> RUNNING SERVER VALIDATIONS...
+                  <RefreshCw className="w-3 h-3 animate-spin text-[#402970]" /> Checking delivery with Kapruka…
                 </span>
               ) : deliveryResult?.available ? (
-                <span className="text-[#0F6E56] font-mono font-bold flex items-center gap-1 bg-[#E1F5EE] py-1.5 px-3 rounded-lg border border-[#0F6E56]/10 w-full text-center justify-center">
+                <span className="text-[#402970] font-mono font-bold flex items-center gap-1 bg-[#EDE5F8] py-1.5 px-3 rounded-lg border border-[#402970]/10 w-full text-center justify-center">
                   <CheckCircle2 className="w-3.5 h-3.5" /> {deliveryResult.notes || 'Delivery available for this date'}
                 </span>
               ) : (
                 <span className="text-[#C0392B] font-mono font-bold flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> NOT SUPPORTED FOR THIS DATE. suggestions: {deliveryResult?.next_available_date}
+                  <AlertCircle className="w-3.5 h-3.5" /> Slots full for this date — next available: {deliveryResult?.next_available_date}
                 </span>
               )}
             </div>
@@ -483,26 +528,64 @@ export default function CartDrawer({
       {cart.length > 0 && selectedCity && deliveryDate && deliveryResult?.available && !orderResult && (
         <form onSubmit={handleCheckoutSubmit} className="space-y-4 bg-white border border-black/5 rounded-2xl p-4 animate-fade-in shadow-xs">
           <div className="flex items-center gap-1.5 border-b border-black/5 pb-2">
-            <User className="w-4 h-4 text-[#0F6E56]" />
+            <User className="w-4 h-4 text-[#402970]" />
             <span className={`text-[11px] font-mono font-bold text-gray-500 uppercase tracking-widest ${lang === 'si' ? 'font-sinhala' : ''}`}>
               {getLoc('formHeader')}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          {/* Mode Toggle: It's a Gift / It's for Me */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setOrderMode('gift')}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 min-h-[44px] px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                orderMode === 'gift'
+                  ? 'bg-violet-tint border-violet text-violet-mid'
+                  : 'bg-white border-ink/10 text-ink-muted hover:border-violet/30'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Gift className="w-3.5 h-3.5" />
+                It's a Gift
+              </div>
+              <span className="text-[9px] font-normal opacity-60">Add sender name & message</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderMode('self')}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 min-h-[44px] px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                orderMode === 'self'
+                  ? 'bg-violet-tint border-violet text-violet-mid'
+                  : 'bg-white border-ink/10 text-ink-muted hover:border-violet/30'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" />
+                It's for Me
+              </div>
+              <span className="text-[9px] font-normal opacity-60">Skip gift details</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Recipient Name</label>
+              <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">
+                {orderMode === 'self' ? 'Your Name' : 'Recipient Name'}
+              </label>
               <input
                 type="text"
                 required
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
-                placeholder="Amma Rathnayake"
-                className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
+                placeholder={orderMode === 'self' ? 'Your name' : 'Amma Rathnayake'}
+                className="w-full bg-surface-warm border border-ink/5 rounded-lg px-3 py-2.5 min-h-[44px] text-xs focus:outline-none focus:bg-white placeholder-ink-faint text-ink"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Sri Lankan Phone</label>
+              <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">
+                {orderMode === 'self' ? 'Your Phone' : 'Sri Lankan Phone'}
+              </label>
               <input
                 type="tel"
                 required
@@ -515,7 +598,9 @@ export default function CartDrawer({
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Street Address</label>
+            <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">
+              {orderMode === 'self' ? 'Your Address' : 'Street Address'}
+            </label>
             <input
               type="text"
               required
@@ -526,61 +611,159 @@ export default function CartDrawer({
             />
           </div>
 
+          {/* Location Type */}
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Location Type</label>
+            <div className="flex gap-1.5">
+              {([
+                { value: 'house',     icon: <Home className="w-3 h-3" />,      label: 'House' },
+                { value: 'apartment', icon: <Building2 className="w-3 h-3" />, label: 'Apt' },
+                { value: 'office',    icon: <Briefcase className="w-3 h-3" />, label: 'Office' },
+                { value: 'other',     icon: <MapPin className="w-3 h-3" />,    label: 'Other' },
+              ] as const).map(({ value, icon, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLocationType(value)}
+                  className={`flex-1 flex items-center justify-center gap-1 py-2 min-h-[40px] px-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                    locationType === value
+                      ? 'bg-[#EDE5F8] border-[#402970] text-[#5B3E8A]'
+                      : 'bg-white border-black/10 text-gray-500 hover:border-[#402970]/30'
+                  }`}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Delivery Instructions (optional) */}
           <div className="space-y-1">
-            <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Your Name (From: ___)</label>
+            <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">
+              Delivery Instructions <span className="text-gray-300">(optional)</span>
+            </label>
             <input
               type="text"
-              value={senderName}
-              onChange={(e) => setSenderName(e.target.value)}
-              placeholder="Harry"
+              value={deliveryInstructions}
+              onChange={(e) => { if (e.target.value.length <= 250) setDeliveryInstructions(e.target.value); }}
+              placeholder="Gate code, buzzer number, leave at door..."
               className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
+              maxLength={250}
             />
           </div>
 
-          {/* Icing text for Cakes */}
+          {/* Sender Name + Anonymous — hidden in "for me" mode */}
+          {orderMode === 'gift' && (
+            <>
+              <div className="space-y-1">
+                <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Sender Name (appears as “From:”)</label>
+                <input
+                  type="text"
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  placeholder="Harry"
+                  className="w-full bg-surface-warm border border-ink/5 rounded-lg px-3 py-2.5 min-h-[44px] text-xs focus:outline-none focus:bg-white placeholder-ink-faint text-ink"
+                />
+              </div>
+
+              {/* Anonymous toggle */}
+              <div className="flex items-center justify-between bg-[#FAF8F4] rounded-lg px-3 py-2 border border-black/5">
+                <div className="flex items-center gap-2">
+                  {anonymous ? <EyeOff className="w-3.5 h-3.5 text-[#402970]" /> : <Eye className="w-3.5 h-3.5 text-gray-400" />}
+                  <span className="text-[10px] font-mono text-gray-600 font-semibold">
+                    Anonymous gift — hide my name
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAnonymous(!anonymous)}
+                  className={`w-9 h-5 rounded-full transition-all cursor-pointer relative ${anonymous ? 'bg-[#402970]' : 'bg-gray-200'}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${anonymous ? 'left-4.5' : 'left-0.5'}`} />
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Icing text for Cakes — surcharge note */}
           {containsCake && (
             <div className="space-y-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-              <label className="text-[9px] font-mono text-amber-800 font-bold uppercase tracking-wider block">Customize Cake Icing Text</label>
+              <label className="text-[9px] font-mono text-amber-800 font-bold uppercase tracking-wider block">
+                Cake Icing Text <span className="text-amber-500">(+Rs. 140 per cake)</span>
+              </label>
               <input
                 type="text"
                 value={icingText}
                 onChange={(e) => setIcingText(e.target.value)}
                 placeholder="Happy Birthday Amma!"
                 className="w-full bg-white border border-amber-200 rounded-md px-2 py-1 text-xs focus:outline-none font-mono"
-                maxLength={40}
+                maxLength={120}
+              />
+              <span className="text-[9px] font-mono text-amber-700">{icingText.length}/120 chars</span>
+            </div>
+          )}
+
+          {/* Gift message — hidden in "for me" mode */}
+          {orderMode === 'gift' && (
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Add Personal Greeting Card Message</label>
+                <span className="text-[8px] font-mono font-medium text-gray-400">{giftMessage.length}/300 chars</span>
+              </div>
+              <textarea
+                value={giftMessage}
+                onChange={(e) => {
+                  if (e.target.value.length <= 300) setGiftMessage(e.target.value);
+                }}
+                placeholder="Write a heartwarming message to deliver physically alongside your gift..."
+                className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg p-2 text-xs h-12 lazy-none focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
               />
             </div>
           )}
 
-          {/* Message Box Card with char check (F-09) */}
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <label className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider block">Add Personal Greeting Card Message</label>
-              <span className="text-[8px] font-mono font-medium text-gray-400">{giftMessage.length}/300 chars</span>
+          {/* Currency selector */}
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-gray-400 font-bold uppercase tracking-wider">Currency</span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowCurrencyPicker(!showCurrencyPicker)}
+                className="flex items-center gap-1 bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1 text-[10px] font-mono font-bold text-gray-700 hover:border-[#402970]/30 cursor-pointer"
+              >
+                {currency}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {showCurrencyPicker && (
+                <div className="absolute right-0 bottom-8 bg-white border border-black/5 rounded-xl shadow-md z-20 overflow-hidden">
+                  {['LKR', 'USD', 'GBP', 'AUD', 'CAD', 'EUR'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setCurrency(c); setShowCurrencyPicker(false); }}
+                      className={`block w-full text-left px-4 py-1.5 text-[10px] font-mono hover:bg-[#EDE5F8] cursor-pointer ${currency === c ? 'text-[#402970] font-bold' : 'text-gray-700'}`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <textarea
-              value={giftMessage}
-              onChange={(e) => {
-                if (e.target.value.length <= 300) setGiftMessage(e.target.value);
-              }}
-              placeholder="Write a heartwarming message to deliver physically alongside your gift..."
-              className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg p-2 text-xs h-12 lazy-none focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
-            />
           </div>
 
           {/* Item subtotal only — delivery shown after lock */}
           <div className="pt-2 border-t border-black/5">
             <div className="flex justify-between text-xs text-[#6B6B6B] font-mono">
               <span className={lang === 'si' ? 'font-sinhala' : ''}>{getLoc('sub')}</span>
-              <span>Rs. {subtotal.toLocaleString()} LKR</span>
+              <span>{formatPrice(subtotal, currency as Currency)}</span>
             </div>
             <p className="text-[9px] font-mono text-gray-400 mt-1">Delivery fee shown after order is locked</p>
           </div>
 
           <button
             type="submit"
-            disabled={isOrdering || recipientPhone.length < 9 || !recipientName || !deliveryAddress}
-            className="w-full bg-[#0F6E56] hover:bg-[#0c5945] text-white py-3 px-4 rounded-xl font-display font-bold text-xs transition duration-150 cursor-pointer shadow-md disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={isOrdering || !isValidPhone(recipientPhone) || !recipientName || !deliveryAddress}
+            className="w-full bg-violet hover:bg-violet-deep text-white py-3.5 min-h-[48px] px-4 rounded-xl font-display font-bold text-xs transition duration-150 cursor-pointer shadow-md disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isOrdering ? (
               <>
@@ -619,23 +802,23 @@ export default function CartDrawer({
           <div className="space-y-2">
             <span className="text-[10px] font-mono text-slate-400">Transaction total:</span>
             <p className="text-2xl font-mono font-bold text-white tracking-tight">
-              Rs. {orderResult.total_lkr.toLocaleString()} <span className="text-xs font-sans text-slate-400 font-normal">LKR</span>
+              {formatPrice(orderResult.total_lkr || orderResult.summary?.grand_total, (orderResult.summary?.currency || currency) as Currency)}
             </p>
             {/* Breakdown: items + delivery — always shown after lock */}
             <div className="bg-slate-800/50 rounded-xl p-3 space-y-1.5 border border-slate-700/40">
               {cart.map((item, i) => (
                 <div key={`locked-${item.product_code}-${i}`} className="flex justify-between items-center text-[10px] font-mono text-slate-300">
                   <span className="truncate max-w-[60%]">{item.name}</span>
-                  <span>Rs. {(item.price_lkr * item.quantity).toLocaleString()}</span>
+                  <span>{formatPrice(item.price_lkr * item.quantity, (item.currency || currency) as Currency)}</span>
                 </div>
               ))}
               {(() => {
                 const itemsTotal = cart.reduce((s, i) => s + i.price_lkr * i.quantity, 0);
-                const deliveryFee = orderResult.total_lkr - itemsTotal;
+                const deliveryFee = (orderResult.total_lkr || orderResult.summary?.grand_total || 0) - itemsTotal;
                 return deliveryFee > 0 ? (
                   <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 border-t border-slate-700/40 pt-1.5">
                     <span>Delivery fee</span>
-                    <span>Rs. {deliveryFee.toLocaleString()}</span>
+                    <span>{formatPrice(deliveryFee, (orderResult.summary?.currency || currency) as Currency)}</span>
                   </div>
                 ) : null;
               })()}
@@ -648,7 +831,7 @@ export default function CartDrawer({
                 <button
                   type="button"
                   onClick={() => window.open(orderResult.pay_url, '_blank', 'noopener,noreferrer')}
-                  className="block text-center py-2.5 px-3 bg-[#0F6E56] hover:bg-[#0c5945] text-white font-display font-semibold text-xs rounded-lg transition duration-150 shadow-sm border border-[#0F6E56]/10 transform active:scale-98 cursor-pointer"
+                  className="block text-center py-2.5 px-3 bg-[#402970] hover:bg-[#2D1B69] text-white font-display font-semibold text-xs rounded-lg transition duration-150 shadow-sm border border-[#402970]/10 transform active:scale-98 cursor-pointer"
                 >
                   Open Kapruka Checkout →
                 </button>
@@ -658,7 +841,7 @@ export default function CartDrawer({
                   onClick={() => handleCopyLink(orderResult.pay_url)}
                   className={`py-2.5 px-3 text-xs font-semibold rounded-lg font-display border transition-all duration-150 cursor-pointer text-center ${
                     copySuccess
-                      ? 'bg-green-50 text-[#0F6E56] border-green-200'
+                      ? 'bg-green-50 text-[#402970] border-green-200'
                       : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
                   }`}
                 >
@@ -672,13 +855,13 @@ export default function CartDrawer({
             {timeLeft <= 300 ? ( // Display renewal warning at remaining < 5 minutes
               <div className="bg-amber-950/30 border border-amber-500/20 text-xs p-2.5 rounded-xl text-amber-300 space-y-2">
                 <p className="flex items-center gap-1 leading-normal font-medium">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> price lock expires in less than 5 min!
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> Price lock expires in less than 5 min!
                 </p>
                 <button
                   onClick={onRenewOrder}
                   className="w-full py-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-[10px] transition font-mono uppercase cursor-pointer"
                 >
-                  Renew price validity lock (60 mins)
+                  Renew price lock (60 mins)
                 </button>
               </div>
             ) : (
@@ -697,9 +880,9 @@ export default function CartDrawer({
             
             <button
               onClick={triggerShare}
-              className="text-[#0F6E56] bg-white hover:bg-gray-50 flex items-center gap-1 py-1.5 px-2.5 rounded-lg text-[10px] font-bold font-mono uppercase cursor-pointer transition active:scale-95"
+              className="text-[#402970] bg-white hover:bg-gray-50 flex items-center gap-1 py-1.5 px-2.5 rounded-lg text-[10px] font-bold font-mono uppercase cursor-pointer transition active:scale-95"
             >
-              <Share2 className="w-3.5 h-3.5" /> Share Cards
+              <Share2 className="w-3.5 h-3.5" /> Share Gift Card
             </button>
           </div>
         </div>
@@ -707,11 +890,9 @@ export default function CartDrawer({
 
       {/* SHAREABLE GIFT CARD PNG EXPORT CANVAS (F-17 feature!) */}
       {showShareCard && orderResult && (
-        <div className="bg-white border-2 border-[#0F6E56] rounded-2xl p-4 space-y-4 shadow-xl animate-fade-in text-gray-900 select-none">
+        <div className="bg-white border-2 border-[#402970] rounded-2xl p-4 space-y-4 shadow-xl animate-fade-in text-gray-900 select-none">
           <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-            <span className="text-[10px] bg-[#E1F5EE] text-[#0F6E56] px-2.5 py-0.5 rounded-full font-mono font-bold">
-              SHAREABLE GIFT CARD
-            </span>
+            <KaprukaLogo className="h-5" variant="default" />
             <button
               onClick={() => setShowShareCard(false)}
               className="text-gray-400 hover:text-gray-900 font-bold"
@@ -722,10 +903,10 @@ export default function CartDrawer({
 
           {/* Graphic layout of card */}
           <div className="bg-linear-to-b from-[#FAF8F4] to-white border border-gray-100 rounded-xl p-5 text-center space-y-3 shadow-inner relative overflow-hidden">
-            <div className="absolute top-0 left-0 bg-[#0F6E56] w-12 h-12 rounded-br-3xl opacity-5" />
-            <Gift className="w-10 h-10 text-[#0F6E56] mx-auto animate-bounce" />
+            <div className="absolute top-0 left-0 bg-[#402970] w-12 h-12 rounded-br-3xl opacity-5" />
+            <KaprukaLogo className="h-6 mx-auto" variant="default" />
             
-            <h3 className="font-display font-bold text-[#0F6E56] text-sm tracking-wide uppercase">
+            <h3 className="font-display font-bold text-[#402970] text-sm tracking-wide uppercase">
               A Gift is on its way to {selectedCity?.name || 'You'}!
             </h3>
             
@@ -749,7 +930,7 @@ export default function CartDrawer({
 
           <div className="grid grid-cols-2 gap-2 text-center text-xs">
             <a
-              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`I sent you a gift via Wasi Gift Concierge! Heading to ${selectedCity?.name} on ${deliveryDate}. Ref: ${orderResult.order_ref}`)}`}
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Something special is heading to ${selectedCity?.name} on ${deliveryDate} — sent via Wasi, Kapruka's AI shopping bestie! Ref: ${orderResult.order_ref}`)}`}
               target="_blank"
               rel="noreferrer"
               className="bg-[#25D366] hover:bg-[#20ba59] text-white py-2 px-3 rounded-lg font-semibold cursor-pointer transition flex items-center justify-center gap-1 text-[10px] font-mono"

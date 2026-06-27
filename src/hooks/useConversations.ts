@@ -93,6 +93,9 @@ export function useConversations({ ownerId }: UseConversationsOpts) {
   }, []);
 
   const updateTitle = useCallback(async (id: string, title: string): Promise<boolean> => {
+    // Optimistic local update — server already wrote to DB via service key,
+    // so show the title immediately even if the client-side write is blocked by RLS (guests).
+    setConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c));
     const { error } = await supabase
       .from('conversations')
       .update({ title })
@@ -101,7 +104,6 @@ export function useConversations({ ownerId }: UseConversationsOpts) {
       console.error('[conversations] update title failed', error.message);
       return false;
     }
-    setConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c));
     return true;
   }, []);
 
