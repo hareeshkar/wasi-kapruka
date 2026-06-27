@@ -1567,6 +1567,13 @@ async function startServer() {
       ? `\n\n--- VISION MODE (${validImages.length} image${validImages.length > 1 ? 's' : ''} attached) ---
 The user uploaded a photo and wants to find SIMILAR or RELATED products on Kapruka.
 
+STEP 0 — IS THIS A SEARCHABLE PRODUCT?
+  If the image is a selfie, landscape, pet, screenshot, text message, food you cooked,
+  artwork, or any non-purchasable image: DO NOT SEARCH.
+  Instead reply: "Nice photo! But I'm a gift concierge — I can help you find products
+  on Kapruka. Tell me what you're looking for, or describe the item in the picture."
+  If you're unsure whether it's a product, err on the side of searching.
+
 STEP 1 — EXTRACT SEARCHABLE ATTRIBUTES from the image:
   Object    : What is it exactly? (t-shirt, vase, cake, watch, toy, perfume bottle)
   Colour    : Be precise. "Navy blue" not "blue". "Dusty rose" not "pink". "Charcoal" not "grey".
@@ -1615,6 +1622,9 @@ STEP 4 — QUALITY FILTER BEFORE RESPONDING:
 STEP 5 — RESPOND:
   ONE sentence: "I see a [detailed description]! Here's what I found on Kapruka:"
   Then show the search results. Cards handle the rest.
+
+MULTIPLE IMAGES: If 2+ images uploaded, identify the PRIMARY product (largest,
+centre-frame). Mention all items briefly but search only for the primary one.
 ---`
       : '';
 

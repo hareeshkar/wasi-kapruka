@@ -606,19 +606,46 @@ export default function App() {
     // Build reply message
     const withinBudget = filterByBudget(state.linkedProducts, budget);
 
-    // ── RELEVANCE GATE: strip products if the AI's text says it found nothing ──
-    // The LLM sometimes returns product cards even when its text says "I couldn't find
-    // that" or "sorry, we don't have that". This happens when search results are from
-    // a previous query or are completely unrelated. The text is the ground truth.
+    // ── RELEVANCE GATE ────────────────────────────────────────────────────────
+    // Principle: the AI's TEXT is the ground truth. If the text says it didn't find
+    // products, the product cards are noise (from fuzzy search or previous queries).
+    //
+    // Two tiers of signals:
+    //   STRONG ("couldn't find", "no results") → strip cards, no exceptions
+    //   WEAK   ("sorry", "unfortunately") → only strip if NO strong positive signal follows
+    //   POSITIVE ("here are", "I found", "check out") → ALWAYS keep cards
     const replyLower = (data.reply || '').toLowerCase();
-    const negativeSignals = [
-      "couldn't find", "don't have", "do not have", "sorry", "no results",
-      "no matching", "not available", "out of stock", "don't carry",
-      "can't find", "cannot find", "doesn't seem to", "doesn't have",
-      "not currently", "no exact match", "unfortunately",
+    const replyText = data.reply || '';
+
+    const strongNegative = [
+      "couldn't find", "can't find", "cannot find",
+      "no results", "no matching", "no exact match",
+      "not available", "out of stock", "doesn't have any",
+      "don't have any", "does not carry", "don't carry",
+      "not currently", "not in stock",
     ];
-    const hasNegativeSignal = negativeSignals.some(s => replyLower.includes(s));
-    const filteredProducts = hasNegativeSignal ? [] : withinBudget;
+    const weakNegative = ["sorry", "unfortunately", "afraid"];
+    const positive = [
+      "here are", "here's what", "i found", "check out",
+      "take a look", "these might", "these could", "how about",
+      "what about", "similar", "alternative", "option",
+    ];
+
+    const hasStrongNegative = strongNegative.some(s => replyLower.includes(s));
+    const hasPositive = positive.some(s => replyLower.includes(s));
+    const hasWeakNegative = weakNegative.some(s => replyLower.includes(s));
+
+    // Strip products only if:
+    //   - strong negative signal (definitely no results), OR
+    //   - weak negative + no positive signal (polite "sorry" with no follow-up products)
+    const shouldStripProducts = hasStrongNegative || (hasWeakNegative && !hasPositive);
+
+    // Also strip if the reply is empty — no AI endorsement, no cards
+    const filteredProducts = (!replyText || shouldStripProducts) ? [] : withinBudget;
+
+    if (shouldStripProducts && withinBudget.length > 0) {
+      console.warn(`[relevance-gate] Stripped ${withinBudget.length} products. Signal: "${strongNegative.find(s => replyLower.includes(s)) || weakNegative.find(s => replyLower.includes(s))}"`);
+    }
 
     const replyMsg: Message = {
       id: crypto.randomUUID(),
