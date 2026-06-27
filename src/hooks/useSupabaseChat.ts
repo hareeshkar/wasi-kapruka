@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { City, DeliveryCheckResult, Message, Order, OrderIntent, Product } from '../types';
 import { getOrCreateSession, supabase } from '../lib/supabase';
 
-// Chat hook — supports BOTH modes:
-//   - Guest:  rows have session_id = local_sid, owner_id IS NULL
-//   - Auth:   rows have owner_id = auth.uid(), session_id may be anything
-// The hook re-queries whenever the auth state changes (sign-in / sign-out).
+// Chat hook — scoped to a SINGLE CONVERSATION.
+// All messages for a conversation are loaded on mount; new ones are
+// appended locally and persisted to Supabase.
 
 type UseSupabaseChatOpts = {
   ownerId: string | null;
+  conversationId: string | null;
 };
 
 type SupabaseMessageRow = {
@@ -24,6 +24,11 @@ type SupabaseMessageRow = {
     order_created?: Order;
     tracking_result?: any;
     order_intent?: OrderIntent;
+    search_cursor?: { q: string; cursor: string } | null;
+    uploaded_images?: Array<{ data: string; mimeType: string }> | null;
+    product_detail?: Product | null;
+    compare_products?: Product[] | null;
+    categories?: any[] | null;
   } | null;
   created_at: string;
 };
@@ -49,50 +54,63 @@ const toMessage = (row: SupabaseMessageRow): Message => ({
   order_created: row.metadata?.order_created,
   tracking_result: row.metadata?.tracking_result,
   order_intent: row.metadata?.order_intent,
+  search_cursor: row.metadata?.search_cursor ?? null,
+  uploaded_images: row.metadata?.uploaded_images ?? undefined,
+  product_detail: row.metadata?.product_detail ?? undefined,
+  compare_products: row.metadata?.compare_products ?? undefined,
+  categories: row.metadata?.categories ?? undefined,
 });
 
 type AddMessageOptions = {
   persist?: boolean;
 };
 
-export function useSupabaseChat({ ownerId }: UseSupabaseChatOpts) {
+export function useSupabaseChat({ ownerId, conversationId }: UseSupabaseChatOpts) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const sessionId = useMemo(() => getOrCreateSession(), []);
 
-  // Reload messages when auth state changes
+  // Reload messages when conversation OR auth state changes
   useEffect(() => {
+    // Clear immediately so the previous conv's messages never bleed into the new one
+    // (prevents isFirstMessage from being wrong during the async DB load).
+    setMessages([]);
+    if (!conversationId) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
 
-    const base = supabase
+    supabase
       .from('messages')
       .select('*')
-      .order('created_at', { ascending: true });
-
-    const filtered = ownerId
-      ? base.eq('owner_id', ownerId)
-      : base.eq('session_id', sessionId);
-
-    filtered.then(({ data, error }) => {
-      if (error) console.error('[supabase chat] load failed', error.message);
-      if (active) {
-        const rows = (data as SupabaseMessageRow[]) || [];
-        setMessages(rows.filter(row => row.role === 'user' || row.role === 'assistant').map(toMessage));
-        setLoading(false);
-      }
-    });
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) console.error('[supabase chat] load failed', error.message);
+        if (active) {
+          const rows = (data as SupabaseMessageRow[]) || [];
+          setMessages(rows.filter(row => row.role === 'user' || row.role === 'assistant').map(toMessage));
+          setLoading(false);
+        }
+      });
 
     return () => {
       active = false;
     };
-  }, [sessionId, ownerId]);
+  }, [conversationId, ownerId]);
 
   const addMessage = useCallback(async (msg: Message, options: AddMessageOptions = {}) => {
     setMessages(prev => [...prev, msg]);
     if (options.persist === false) return;
+    if (!conversationId) {
+      console.warn('[supabase chat] addMessage called with no active conversation');
+      return;
+    }
 
     const row: Record<string, any> = {
+      conversation_id: conversationId,
       role: msg.role,
       content: msg.content,
       tool_calls: (msg as any).toolCalls ?? null,
@@ -105,32 +123,50 @@ export function useSupabaseChat({ ownerId }: UseSupabaseChatOpts) {
         order_created: msg.order_created,
         tracking_result: msg.tracking_result,
         order_intent: msg.order_intent,
+        search_cursor: msg.search_cursor,
+        uploaded_images: msg.uploaded_images ?? null,
+        product_detail: msg.product_detail ?? null,
+        compare_products: msg.compare_products ?? null,
+        categories: msg.categories ?? null,
       },
     };
-    if (ownerId) {
-      row.owner_id = ownerId;
-      row.session_id = sessionId;
-    } else {
-      row.session_id = sessionId;
-    }
+    if (ownerId) row.owner_id = ownerId;
+    row.session_id = sessionId;
 
     const { error } = await supabase.from('messages').insert(row);
     if (error) console.error('[supabase chat] insert failed', error.message);
-  }, [sessionId, ownerId]);
+
+    // Keep sidebar ordering fresh — server-side persistence (which used to bump
+    // this) is now disabled in favour of client-side rich persistence.
+    void supabase
+      .from('conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', conversationId)
+      .then(({ error: bumpErr }) => {
+        if (bumpErr) console.error('[supabase chat] last_message_at bump failed', bumpErr.message);
+      });
+  }, [sessionId, ownerId, conversationId]);
 
   const clearMessages = useCallback(async () => {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
     setMessages([]);
-    let q = supabase.from('messages').delete();
-    q = ownerId ? q.eq('owner_id', ownerId) : q.eq('session_id', sessionId);
-    const { error } = await q;
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', conversationId);
     if (error) console.error('[supabase chat] clear failed', error.message);
-  }, [sessionId, ownerId]);
+  }, [conversationId]);
 
   const replaceMessages = useCallback(async (next: Message[]) => {
     setMessages(next);
-    let q = supabase.from('messages').delete();
-    q = ownerId ? q.eq('owner_id', ownerId) : q.eq('session_id', sessionId);
-    const { error: clearError } = await q;
+    if (!conversationId) return;
+    const { error: clearError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', conversationId);
     if (clearError) {
       console.error('[supabase chat] replace clear failed', clearError.message);
       return;
@@ -139,6 +175,7 @@ export function useSupabaseChat({ ownerId }: UseSupabaseChatOpts) {
 
     const rows = next.map(msg => {
       const row: Record<string, any> = {
+        conversation_id: conversationId,
         role: msg.role,
         content: msg.content,
         products: msg.products || null,
@@ -150,20 +187,25 @@ export function useSupabaseChat({ ownerId }: UseSupabaseChatOpts) {
           order_created: msg.order_created,
           tracking_result: msg.tracking_result,
           order_intent: msg.order_intent,
+          search_cursor: msg.search_cursor,
+          uploaded_images: msg.uploaded_images ?? null,
+          product_detail: msg.product_detail ?? null,
+          compare_products: msg.compare_products ?? null,
+          categories: msg.categories ?? null,
         },
       };
-      if (ownerId) {
-        row.owner_id = ownerId;
-        row.session_id = sessionId;
-      } else {
-        row.session_id = sessionId;
-      }
+      if (ownerId) row.owner_id = ownerId;
+      row.session_id = sessionId;
       return row;
     });
 
     const { error } = await supabase.from('messages').insert(rows);
     if (error) console.error('[supabase chat] replace insert failed', error.message);
-  }, [sessionId, ownerId]);
+  }, [sessionId, ownerId, conversationId]);
 
-  return { messages, loading, addMessage, clearMessages, replaceMessages, sessionId };
+  const updateMessage = useCallback((msgId: string, updates: Partial<Message>) => {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, ...updates } : m));
+  }, []);
+
+  return { messages, loading, addMessage, clearMessages, replaceMessages, updateMessage, sessionId };
 }
