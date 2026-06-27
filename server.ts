@@ -723,17 +723,19 @@ ORDER MODE DETECTION:
     → Tone: warmth doubles — they're far from family. "She'll know you remembered, even from London."
 
   ★ BUDGET CURRENCY CONVERSION (CRITICAL — prevents showing Rs.100 items to a $100 budget):
-    The SESSION CONTEXT budget field is ALWAYS in LKR (the user's raw input).
-    When the user mentions a foreign currency, you MUST convert before searching:
-      1 USD  ≈ Rs.305 LKR    1 GBP  ≈ Rs.390 LKR    1 EUR  ≈ Rs.330 LKR
-      1 AUD  ≈ Rs.200 LKR    1 CAD  ≈ Rs.220 LKR
+    MCP natively supports currency conversion via the "currency" parameter.
+    When the user mentions a foreign currency (USD, GBP, EUR, AUD, CAD):
+      1. Pass currency=USD (or GBP/EUR/AUD/CAD) to T1 search AND T2 product details
+      2. Pass max_price=100 in the USER'S currency (NOT converted to LKR)
+      3. MCP will return prices converted to that currency and filter by that currency
+      4. Pass the SAME currency to T6 create_order — the checkout link charges in it
     EXAMPLE: User says "my budget is around 100 USD"
-      → Convert: 100 × 305 = Rs.30,500 LKR
-      → Pass max_price=30500 to T1 search
-      → Respond: "I've converted your $100 budget — that's about Rs.30,500 LKR. Here's what I found!"
-    WRONG: Pass max_price=100 → returns Rs.100 items (cables, keychains)
-    RIGHT: Convert first, then search with the LKR amount
-    NEVER show items priced in LKR without mentioning the conversion to the user.
+      → Call T1 with q="rose", max_price=100, currency="USD"
+      → MCP returns prices in USD, filtered to ≤$100
+      → Respond: "Here's what I found within your $100 budget!"
+    WRONG: Convert to LKR manually — exchange rates fluctuate, MCP handles this natively
+    WRONG: Pass max_price=30500 with currency="LKR" — this is stale conversion
+    RIGHT: Pass max_price=100 with currency="USD" — let MCP convert at current rate
 
   ★ URGENT / SAME-DAY (user says "today", "now", "eppa", "adha", "innaiku", "ASAP"):
     → Call T5 immediately with delivery_date = TODAY (__TODAY_LK__) once city is known.
@@ -1576,7 +1578,7 @@ CRITICAL INSTRUCTIONS:
       ...personalizationRules,
       'SESSION CONTEXT (authoritative — do not re-ask):',
       occasion ? `- Occasion: ${occasion} — prioritised search terms: ${OCCASION_HINTS[occasion] ?? 'chocolate'}` : '',
-      budget > 0 ? `- Budget: Rs.${Number(budget).toLocaleString()} LKR — ALWAYS pass max_price=${budget} to T1. If user mentioned foreign currency (USD/GBP/EUR/AUD/CAD), convert to LKR first (1 USD≈305 LKR, 1 GBP≈390 LKR, 1 EUR≈330 LKR, 1 AUD≈200 LKR, 1 CAD≈220 LKR) and use the LKR amount as max_price.` : '',
+      budget > 0 ? `- Budget: ${Number(budget).toLocaleString()} (user's stated amount) — ALWAYS pass max_price=${budget} to T1. If user mentioned a foreign currency (USD/GBP/EUR/AUD/CAD), also pass currency=<that currency> to T1/T2/T6 — MCP converts natively at current rates.` : '',
       `- Cart:\n${cartSummary}`,
       lastCartAction ? `- Recent cart action: ${lastCartAction}` : '',
       cartLines.length > 0 ? '- Do NOT recommend items already in cart unless asked.' : '',

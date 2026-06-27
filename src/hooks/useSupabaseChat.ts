@@ -29,6 +29,11 @@ type SupabaseMessageRow = {
     product_detail?: Product | null;
     compare_products?: Product[] | null;
     categories?: any[] | null;
+    error?: { message: string; category: string; isRetryable: boolean; retryAfterMs?: number } | null;
+    isRetrying?: boolean;
+    audio_data?: string | null;
+    audio_mime_type?: string | null;
+    transcription?: string | null;
   } | null;
   created_at: string;
 };
@@ -59,6 +64,11 @@ const toMessage = (row: SupabaseMessageRow): Message => ({
   product_detail: row.metadata?.product_detail ?? undefined,
   compare_products: row.metadata?.compare_products ?? undefined,
   categories: row.metadata?.categories ?? undefined,
+  error: row.metadata?.error ?? undefined,
+  isRetrying: row.metadata?.isRetrying ?? undefined,
+  audio_data: row.metadata?.audio_data ?? undefined,
+  audio_mime_type: row.metadata?.audio_mime_type ?? undefined,
+  transcription: row.metadata?.transcription ?? undefined,
 });
 
 type AddMessageOptions = {
@@ -128,6 +138,11 @@ export function useSupabaseChat({ ownerId, conversationId }: UseSupabaseChatOpts
         product_detail: msg.product_detail ?? null,
         compare_products: msg.compare_products ?? null,
         categories: msg.categories ?? null,
+        error: msg.error ?? null,
+        isRetrying: msg.isRetrying ?? false,
+        audio_data: msg.audio_data ?? null,
+        audio_mime_type: msg.audio_mime_type ?? null,
+        transcription: msg.transcription ?? null,
       },
     };
     if (ownerId) row.owner_id = ownerId;
@@ -192,6 +207,11 @@ export function useSupabaseChat({ ownerId, conversationId }: UseSupabaseChatOpts
           product_detail: msg.product_detail ?? null,
           compare_products: msg.compare_products ?? null,
           categories: msg.categories ?? null,
+          error: msg.error ?? null,
+          isRetrying: msg.isRetrying ?? false,
+          audio_data: msg.audio_data ?? null,
+          audio_mime_type: msg.audio_mime_type ?? null,
+          transcription: msg.transcription ?? null,
         },
       };
       if (ownerId) row.owner_id = ownerId;

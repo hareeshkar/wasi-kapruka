@@ -302,7 +302,43 @@ export async function getOrEstablishSession(forceRefresh: boolean = false): Prom
 }
 
 // Main function to query the JSON-RPC interface of the live Kapruka MCP
+// ── Client-side TTL cache ──────────────────────────────────────────────────────
+// Mirrors the Kapruka MCP server's own per-endpoint cache TTLs (verified from
+// .mcp-kapruka/src/api/client.py) so repeat reads never burn the 60 req/min
+// rate limit. check_delivery (real-time clock) and create_order (mutation)
+// are intentionally uncached.
+const MCP_TTL_MS: Record<string, number> = {
+  kapruka_list_categories:      30 * 60_000,       // server: 30 min
+  kapruka_get_product:          10 * 60_000,       // server: 10 min
+  kapruka_search_products:       5 * 60_000,       // server: 5 min
+  kapruka_list_delivery_cities: 24 * 60 * 60_000,  // server: 24 h
+  kapruka_track_order:               30_000,       // server: 30 s
+};
+const MCP_CACHE_MAX = 500;
+const mcpCache = new Map<string, { expires: number; value: any }>();
+
 export async function callMcpTool(toolName: string, args: any, forceDemo: boolean = false): Promise<any> {
+  const ttl = MCP_TTL_MS[toolName];
+  if (!ttl || forceDemo) return callMcpToolUncached(toolName, args, forceDemo);
+
+  // Same raw args → same sanitization → same result, so raw args are a valid key.
+  const key = `${toolName}:${JSON.stringify(args)}`;
+  const hit = mcpCache.get(key);
+  if (hit && hit.expires > Date.now()) {
+    console.log(`[MCP cache] hit ${toolName}`);
+    return structuredClone(hit.value);
+  }
+
+  const value = await callMcpToolUncached(toolName, args, forceDemo);
+  if (mcpCache.size >= MCP_CACHE_MAX) {
+    const oldest = mcpCache.keys().next().value;
+    if (oldest) mcpCache.delete(oldest);
+  }
+  mcpCache.set(key, { expires: Date.now() + ttl, value });
+  return structuredClone(value);
+}
+
+async function callMcpToolUncached(toolName: string, args: any, forceDemo: boolean = false): Promise<any> {
   if (forceDemo) {
     console.log(`[MCP FORCED DEMO] Calling simulator for tool: ${toolName}`);
     return simulateMcpTool(toolName, args);
@@ -528,6 +564,14 @@ export async function callMcpTool(toolName: string, args: any, forceDemo: boolea
         throw new Error(`MCP returned HTTP status ${res.status}`);
       }
 
+      // Adaptive rate-limit awareness — the MCP returns RateLimit-* headers on
+      // every response (60 req/min free tier). Warn loudly when running hot so
+      // we can see pressure in the logs before hitting 429s.
+      const rlRemaining = res.headers.get('ratelimit-remaining');
+      if (rlRemaining !== null && Number(rlRemaining) <= 10) {
+        console.warn(`[MCP] rate-limit pressure: ${rlRemaining} requests left this minute (resets in ${res.headers.get('ratelimit-reset') ?? '?'}s)`);
+      }
+
       const text = await res.text();
       let jsonPayload: any;
 
@@ -576,9 +620,16 @@ export async function callMcpTool(toolName: string, args: any, forceDemo: boolea
           // Normalize live MCP shapes to our internal format
           if (Array.isArray(parsed)) return normalizeLiveResults(toolName, parsed);
           if (parsed && typeof parsed === 'object') {
-            // kapruka_search_products returns { results: [...], next_cursor, ... }
-            if (Array.isArray(parsed.results)) return normalizeLiveResults(toolName, parsed.results);
-            if (Array.isArray(parsed.products)) return normalizeLiveResults(toolName, parsed.products);
+            // kapruka_search_products returns { results: [...], next_cursor, ... }.
+            // PRESERVE next_cursor — dropping it broke "show me more" pagination
+            // (the LLM could never see the cursor token to pass back).
+            if (Array.isArray(parsed.results)) {
+              const normalized = normalizeLiveResults(toolName, parsed.results, sanitizedParams?.currency);
+              return toolName === 'kapruka_search_products'
+                ? { results: normalized, next_cursor: parsed.next_cursor ?? null }
+                : normalized;
+            }
+            if (Array.isArray(parsed.products)) return normalizeLiveResults(toolName, parsed.products, sanitizedParams?.currency);
             if (Array.isArray(parsed.cities)) return parsed.cities;
             if (Array.isArray(parsed.categories)) return parsed.categories;
           }
@@ -623,22 +674,29 @@ function inferCategory(id: string, name: string, rawCat: string): string {
   return rawCat || 'Gifts';
 }
 
-function normalizeLiveResults(toolName: string, items: any[]): any[] {
+function normalizeLiveResults(toolName: string, items: any[], currency?: string): any[] {
   if (toolName !== 'kapruka_search_products') return items;
   return items.map((p: any) => {
     const rawCat = p.category?.name || p.category || '';
+    const detectedCurrency = p.price?.currency || currency || 'LKR';
     return {
       product_code: p.id || p.product_code || p.product_id || '',
       name: p.name || '',
       price_lkr: p.price?.amount ?? p.price_lkr ?? p.price ?? 0,
       price: p.price?.amount ?? p.price_lkr ?? p.price ?? 0,
+      currency: detectedCurrency,
       category: inferCategory(p.id || p.product_code, p.name, rawCat),
       image_url: p.image_url || p.image || '',
       description: p.summary || p.description || '',
       stock_level: p.stock_level || (p.in_stock ? 'high' : 'low'),
       rating: p.rating ?? null,
       url: p.url || null,
-      variants: p.variants || []
+      variants: (p.variants || []).map((v: any) => ({
+        ...v,
+        price_lkr: v.price?.amount ?? v.price_lkr ?? v.price ?? 0,
+        price: v.price?.amount ?? v.price_lkr ?? v.price ?? 0,
+        currency: v.price?.currency || detectedCurrency,
+      })),
     };
   });
 }

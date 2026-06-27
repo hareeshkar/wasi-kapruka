@@ -420,6 +420,20 @@ export default function App() {
       if (tc.toolName === 'wasi_new_order') {
         shouldClearCart = true;
       }
+
+      // ── Unrecognized tool name — log for debugging ─────────────────────
+      const KNOWN_TOOLS = [
+        'kapruka_search_products', 'kapruka_get_product', 'kapruka_list_delivery_cities',
+        'kapruka_create_order', 'kapruka_track_order', 'kapruka_list_categories',
+        'kapruka_check_delivery',
+        'wasi_prefill_checkout', 'wasi_add_to_cart', 'wasi_remove_from_cart',
+        'wasi_update_cart_quantity', 'wasi_show_progress', 'wasi_order_now',
+        'wasi_show_product_detail', 'wasi_compare_products', 'wasi_show_categories',
+        'wasi_new_order', 'wasi_get_form_state',
+      ];
+      if (!KNOWN_TOOLS.includes(tc.toolName)) {
+        console.warn(`[processToolCalls] Unrecognized tool name: "${tc.toolName}" — result discarded. Possible LLM typo or new tool not yet integrated.`);
+      }
     }
 
     return {
@@ -496,6 +510,81 @@ export default function App() {
         categories: cats,
       });
     }
+  };
+
+  /**
+   * Shared post-response processing for all three handlers (text, voice, retry).
+   * Processes tool calls, executes actions, applies state changes, builds reply,
+   * and runs deferred tools. Returns the reply message for the caller to send.
+   */
+  const processAndApplyToolResponse = async (data: {
+    reply: string;
+    toolCalls?: any[];
+  }): Promise<Message> => {
+    const state = processToolCalls(data.toolCalls || [], { budget, orderIntent });
+
+    // Execute side-effect actions
+    for (const action of state.actions) {
+      switch (action.type) {
+        case 'add_to_cart':
+          handleAddToCart(action.product, action.variant, true);
+          break;
+        case 'remove_from_cart':
+          handleRemoveItem(action.productId);
+          break;
+        case 'update_cart':
+          handleUpdateQty(action.productId, action.quantity);
+          break;
+        case 'show_progress':
+          void addMessage({
+            id: `progress-${Date.now()}-${action.step}`,
+            role: 'assistant' as const,
+            content: `*${action.message}*`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+          break;
+      }
+    }
+
+    // Apply state changes
+    if (state.currentPrefill) {
+      setOrderIntent(state.currentPrefill);
+    }
+    if (state.orderCreated) {
+      setOrderResult(state.orderCreated);
+    }
+    if (state.shouldClearCart) {
+      await clearCart();
+      setOrderIntent(null);
+    }
+    if (state.shouldOrderNow) {
+      const order = await handleChatOrder(state.currentPrefill || orderIntent);
+      if (order) {
+        state.orderCreated = order;
+        setOrderResult(order);
+      }
+    }
+
+    // Build reply message
+    const withinBudget = filterByBudget(state.linkedProducts, budget);
+    const replyMsg: Message = {
+      id: `reply-${Date.now()}`,
+      role: 'assistant',
+      content: data.reply,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      products: withinBudget.length > 0 ? withinBudget : undefined,
+      city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
+      order_created: state.orderCreated,
+      tracking_result: state.trackingData,
+      order_intent: data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result,
+      search_cursor: state.lastSearchCursor,
+    };
+    void addMessage(replyMsg);
+
+    // Post-message deferred processing (product detail, compare, categories)
+    await processDeferredTools(state);
+
+    return replyMsg;
   };
 
   // Serialise cart for AI context — include product_code so LLM knows exact IDs
@@ -586,69 +675,7 @@ export default function App() {
       }
       const data = await res.json();
       if (data.success) {
-        const state = processToolCalls(data.toolCalls || [], { budget, orderIntent });
-
-        // ── Execute side-effect actions from tool processing ──────────────
-        for (const action of state.actions) {
-          switch (action.type) {
-            case 'add_to_cart':
-              // silent=true: LLM already replied this turn
-              handleAddToCart(action.product, action.variant, true);
-              break;
-            case 'remove_from_cart':
-              handleRemoveItem(action.productId);
-              break;
-            case 'update_cart':
-              handleUpdateQty(action.productId, action.quantity);
-              break;
-            case 'show_progress':
-              void addMessage({
-                id: `progress-${Date.now()}-${action.step}`,
-                role: 'assistant' as const,
-                content: `*${action.message}*`,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              });
-              break;
-          }
-        }
-
-        // ── Apply state changes from tool processing ─────────────────────
-        if (state.currentPrefill) {
-          setOrderIntent(state.currentPrefill);
-        }
-        if (state.orderCreated) {
-          setOrderResult(state.orderCreated);
-        }
-        if (state.shouldClearCart) {
-          await clearCart();
-          setOrderIntent(null);
-        }
-        if (state.shouldOrderNow) {
-          const order = await handleChatOrder(state.currentPrefill || orderIntent);
-          if (order) {
-            state.orderCreated = order;
-            setOrderResult(order);
-          }
-        }
-
-        // ── Build and send reply message ─────────────────────────────────
-        const withinBudget = filterByBudget(state.linkedProducts, budget);
-        const replyMsg: Message = {
-          id: `reply-${Date.now()}`,
-          role: 'assistant',
-          content: data.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          products: withinBudget.length > 0 ? withinBudget : undefined,
-          city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
-          order_created: state.orderCreated,
-          tracking_result: state.trackingData,
-          order_intent: data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result,
-          search_cursor: state.lastSearchCursor,
-        };
-        void addMessage(replyMsg);
-
-        // ── Post-message deferred processing (product detail, compare, categories) ──
-        await processDeferredTools(state);
+        await processAndApplyToolResponse(data);
 
         // Fire-and-forget title generation after the first real exchange
         if (isFirstMessage && activeConvId) {
@@ -762,68 +789,7 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        const state = processToolCalls(data.toolCalls || [], { budget, orderIntent });
-
-        // Execute side-effect actions
-        for (const action of state.actions) {
-          switch (action.type) {
-            case 'add_to_cart':
-              handleAddToCart(action.product, action.variant, true);
-              break;
-            case 'remove_from_cart':
-              handleRemoveItem(action.productId);
-              break;
-            case 'update_cart':
-              handleUpdateQty(action.productId, action.quantity);
-              break;
-            case 'show_progress':
-              void addMessage({
-                id: `progress-${Date.now()}-${action.step}`,
-                role: 'assistant' as const,
-                content: `*${action.message}*`,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              });
-              break;
-          }
-        }
-
-        // Apply state changes
-        if (state.currentPrefill) {
-          setOrderIntent(state.currentPrefill);
-        }
-        if (state.orderCreated) {
-          setOrderResult(state.orderCreated);
-        }
-        if (state.shouldClearCart) {
-          await clearCart();
-          setOrderIntent(null);
-        }
-        if (state.shouldOrderNow) {
-          const order = await handleChatOrder(state.currentPrefill || orderIntent);
-          if (order) {
-            state.orderCreated = order;
-            setOrderResult(order);
-          }
-        }
-
-        // Build and send reply message
-        const withinBudget = filterByBudget(state.linkedProducts, budget);
-        const replyMsg: Message = {
-          id: `reply-${Date.now()}`,
-          role: 'assistant',
-          content: data.reply || '',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          products: withinBudget.length > 0 ? withinBudget : undefined,
-          city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
-          order_created: state.orderCreated,
-          tracking_result: state.trackingData,
-          order_intent: state.currentPrefill || undefined,
-          search_cursor: state.lastSearchCursor,
-        };
-        void addMessage(replyMsg);
-
-        // Post-message deferred processing (product detail, compare, categories)
-        await processDeferredTools(state);
+        await processAndApplyToolResponse(data);
       } else {
         // ── Fallback: audio processing failed → try transcription as text ──────
         console.warn('[handleSendVoice] Audio processing failed, falling back to transcription:', data.error);
@@ -984,68 +950,8 @@ export default function App() {
         );
         replaceMessages(finalMessages);
 
-        // Process and add assistant response using shared helpers
-        const state = processToolCalls(data.toolCalls || [], { budget, orderIntent });
-
-        // Execute side-effect actions
-        for (const action of state.actions) {
-          switch (action.type) {
-            case 'add_to_cart':
-              handleAddToCart(action.product, action.variant, true);
-              break;
-            case 'remove_from_cart':
-              handleRemoveItem(action.productId);
-              break;
-            case 'update_cart':
-              handleUpdateQty(action.productId, action.quantity);
-              break;
-            case 'show_progress':
-              void addMessage({
-                id: `progress-${Date.now()}-${action.step}`,
-                role: 'assistant' as const,
-                content: `*${action.message}*`,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              });
-              break;
-          }
-        }
-
-        // Apply state changes
-        if (state.currentPrefill) {
-          setOrderIntent(state.currentPrefill);
-        }
-        if (state.orderCreated) {
-          setOrderResult(state.orderCreated);
-        }
-        if (state.shouldClearCart) {
-          await clearCart();
-          setOrderIntent(null);
-        }
-        if (state.shouldOrderNow) {
-          const order = await handleChatOrder(state.currentPrefill || orderIntent);
-          if (order) {
-            state.orderCreated = order;
-            setOrderResult(order);
-          }
-        }
-
-        // Build and send reply message
-        const withinBudget = filterByBudget(state.linkedProducts, budget);
-        void addMessage({
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: data.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          products: withinBudget.length > 0 ? withinBudget : undefined,
-          city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
-          search_cursor: state.lastSearchCursor,
-          order_created: state.orderCreated,
-          tracking_result: state.trackingData,
-          order_intent: state.currentPrefill || undefined,
-        });
-
-        // Post-message deferred processing (product detail, compare, categories)
-        await processDeferredTools(state);
+        // Process and add assistant response using shared helper
+        await processAndApplyToolResponse(data);
       } else {
         const errorInfo = {
           message: data.error || getFriendlyErrorMessage(data.category || 'unknown'),
