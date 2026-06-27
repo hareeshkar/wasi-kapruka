@@ -338,9 +338,69 @@ export async function callMcpTool(toolName: string, args: any, forceDemo: boolea
   return structuredClone(value);
 }
 
+// ── Circuit Breaker ──────────────────────────────────────────────────────────
+// After 3 consecutive failures, stop calling MCP for 30 seconds.
+// This prevents cascading failures and reduces load on a struggling backend.
+const circuitBreaker = {
+  failures: 0,
+  openUntil: 0,
+  threshold: 3,
+  cooldownMs: 30_000,
+  recordSuccess() { this.failures = 0; },
+  recordFailure() {
+    this.failures++;
+    if (this.failures >= this.threshold) {
+      this.openUntil = Date.now() + this.cooldownMs;
+      console.warn(`[MCP] Circuit OPEN — ${this.failures} consecutive failures. Pausing for ${this.cooldownMs / 1000}s.`);
+    }
+  },
+  isOpen(): boolean {
+    if (Date.now() < this.openUntil) return true;
+    if (this.failures >= this.threshold) {
+      // Cooldown expired — half-open state, allow one attempt
+      this.failures = 0;
+    }
+    return false;
+  },
+};
+
+// ── Response Shape Validator ─────────────────────────────────────────────────
+// Validates that MCP responses have the expected shape based on real API responses.
+// Returns null if valid, or an error message if invalid.
+function validateMcpResponse(toolName: string, data: any): string | null {
+  if (!data || typeof data !== 'object') return `${toolName}: response is not an object`;
+
+  switch (toolName) {
+    case 'kapruka_search_products':
+      if (!Array.isArray(data.results)) return `${toolName}: missing 'results' array`;
+      for (const p of data.results) {
+        if (!p.id && !p.product_code) return `${toolName}: product missing 'id'`;
+        if (!p.name) return `${toolName}: product ${p.id || '?'} missing 'name'`;
+      }
+      break;
+    case 'kapruka_get_product':
+      if (!data.id && !data.product_code) return `${toolName}: product missing 'id'`;
+      if (!data.name) return `${toolName}: product missing 'name'`;
+      break;
+    case 'kapruka_list_categories':
+      if (!Array.isArray(data.categories)) return `${toolName}: missing 'categories' array`;
+      break;
+    case 'kapruka_list_delivery_cities':
+      if (!Array.isArray(data.cities)) return `${toolName}: missing 'cities' array`;
+      break;
+  }
+  return null; // valid
+}
+
 async function callMcpToolUncached(toolName: string, args: any, forceDemo: boolean = false): Promise<any> {
   if (forceDemo) {
     console.log(`[MCP FORCED DEMO] Calling simulator for tool: ${toolName}`);
+    return simulateMcpTool(toolName, args);
+  }
+
+  // Circuit breaker — skip MCP if it's been failing
+  if (circuitBreaker.isOpen()) {
+    console.log(`[MCP] Circuit open — falling back to simulator for '${toolName}'`);
     return simulateMcpTool(toolName, args);
   }
 
@@ -535,6 +595,7 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
     try {
       const sessionId = await getOrEstablishSession(attempts > 1);
       
+      const mcpStart = Date.now();
       const res = await fetch(MCP_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -569,8 +630,11 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
       // we can see pressure in the logs before hitting 429s.
       const rlRemaining = res.headers.get('ratelimit-remaining');
       if (rlRemaining !== null && Number(rlRemaining) <= 10) {
-        console.warn(`[MCP] rate-limit pressure: ${rlRemaining} requests left this minute (resets in ${res.headers.get('ratelimit-reset') ?? '?'}s)`);
+        console.warn(`[MCP] rate-limit pressure: ${rlRemaining} requests left this minute (resets in ${res.headers.get('ratelimit-reset') ?? '?'}s`);
       }
+
+      const mcpLatency = Date.now() - mcpStart;
+      console.log(`[MCP] ${toolName} → ${res.status} in ${mcpLatency}ms`);
 
       const text = await res.text();
       let jsonPayload: any;
@@ -617,6 +681,14 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
         }
         try {
           const parsed = JSON.parse(textBlock);
+          // Validate response shape against known MCP wire format
+          const validationError = validateMcpResponse(toolName, parsed);
+          if (validationError) {
+            console.warn(`[MCP] Response validation failed: ${validationError}. Falling back to simulator.`);
+            circuitBreaker.recordFailure();
+            return simulateMcpTool(toolName, args);
+          }
+          circuitBreaker.recordSuccess();
           // Normalize live MCP shapes to our internal format
           if (Array.isArray(parsed)) return normalizeLiveResults(toolName, parsed);
           if (parsed && typeof parsed === 'object') {
@@ -642,6 +714,7 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
 
     } catch (error) {
       console.warn(`Mcp query of '${toolName}' failed: ${(error as any).message}. Utilizing bulletproof simulated fallback.`);
+      circuitBreaker.recordFailure();
       if (attempts >= 2) {
         return simulateMcpTool(toolName, args);
       }
@@ -798,7 +871,8 @@ function simulateMcpTool(toolName: string, args: any): any {
       return {
         results: mapped,
         next_cursor: sliced.length < results.length ? 'eyJ1IjoiTWc9PSIsInAiOjJ9' : null,
-        applied_filters: { q, limit, in_stock_only: true }
+        applied_filters: { q, limit, in_stock_only: true },
+        _simulated: true,
       };
     }
 
@@ -830,7 +904,8 @@ function simulateMcpTool(toolName: string, args: any): any {
           { name: 'flowers', url: 'https://www.kapruka.com/online/flowers', children: [] },
           { name: 'Grocery', url: 'https://www.kapruka.com/online/grocery', children: [] },
           { name: 'Jewellery', url: 'https://www.kapruka.com/online/jewellery', children: [] }
-        ]
+        ],
+        _simulated: true,
       };
     }
 
@@ -846,7 +921,8 @@ function simulateMcpTool(toolName: string, args: any): any {
       return {
         cities: filtered.map(c => ({ name: c.name, aliases: c.aliases })),
         total_matched: filtered.length,
-        showing: filtered.length
+        showing: filtered.length,
+        _simulated: true,
       };
     }
 
@@ -1012,6 +1088,7 @@ function buildFullProductShape(p: any) {
     attributes: { type: p.category.toLowerCase(), subtype: p.category, weight: '1.0', vendor: 'Kapruka' },
     shipping: { ships_from: 'LK', ships_internationally: true, restricted_countries: [] },
     rating: p.rating,
-    url: p.url
+    url: p.url,
+    _simulated: true,
   };
 }
