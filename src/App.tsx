@@ -606,25 +606,21 @@ export default function App() {
     // Build reply message
     const withinBudget = filterByBudget(state.linkedProducts, budget);
 
-    // ── RELEVANCE GATE ────────────────────────────────────────────────────────
-    // Principle: the AI's TEXT is the ground truth. If the text says it didn't find
-    // products, the product cards are noise (from fuzzy search or previous queries).
-    //
-    // Two tiers of signals:
-    //   STRONG ("couldn't find", "no results") → strip cards, no exceptions
-    //   WEAK   ("sorry", "unfortunately") → only strip if NO strong positive signal follows
-    //   POSITIVE ("here are", "I found", "check out") → ALWAYS keep cards
-    const replyLower = (data.reply || '').toLowerCase();
+    // ── RELEVANCE GATE (client-side safety net) ──────────────────────────────
+    // Primary filter is server-side (search query vs product category).
+    // This is the FALLBACK for edge cases the server can't catch.
     const replyText = data.reply || '';
+    const replyLower = replyText.toLowerCase().trim();
 
+    // Strong negatives: AI explicitly says it found nothing
     const strongNegative = [
       "couldn't find", "can't find", "cannot find",
       "no results", "no matching", "no exact match",
       "not available", "out of stock", "doesn't have any",
-      "don't have any", "does not carry", "don't carry",
+      "don't have any", "does not carry", "don't carry", "doesn't carry",
       "not currently", "not in stock",
     ];
-    const weakNegative = ["sorry", "unfortunately", "afraid"];
+    // Positive: AI is explicitly endorsing/showing products
     const positive = [
       "here are", "here's what", "i found", "check out",
       "take a look", "these might", "these could", "how about",
@@ -633,18 +629,21 @@ export default function App() {
 
     const hasStrongNegative = strongNegative.some(s => replyLower.includes(s));
     const hasPositive = positive.some(s => replyLower.includes(s));
-    const hasWeakNegative = weakNegative.some(s => replyLower.includes(s));
 
-    // Strip products only if:
-    //   - strong negative signal (definitely no results), OR
-    //   - weak negative + no positive signal (polite "sorry" with no follow-up products)
-    const shouldStripProducts = hasStrongNegative || (hasWeakNegative && !hasPositive);
+    // C2 fix: strong + positive = AI is offering alternatives → KEEP
+    const shouldStripProducts = hasStrongNegative && !hasPositive;
 
-    // Also strip if the reply is empty — no AI endorsement, no cards
-    const filteredProducts = (!replyText || shouldStripProducts) ? [] : withinBudget;
+    // C3 fix: minimal reply (emoji, single char) with products → strip
+    const isMinimalReply = replyLower.length <= 2 && !replyLower.includes('?');
+
+    // Empty reply → no AI endorsement → strip
+    const filteredProducts = (!replyText || shouldStripProducts || isMinimalReply) ? [] : withinBudget;
 
     if (shouldStripProducts && withinBudget.length > 0) {
-      console.warn(`[relevance-gate] Stripped ${withinBudget.length} products. Signal: "${strongNegative.find(s => replyLower.includes(s)) || weakNegative.find(s => replyLower.includes(s))}"`);
+      console.warn(`[relevance-gate] Stripped ${withinBudget.length} products (strong negative, no positive)`);
+    }
+    if (isMinimalReply && withinBudget.length > 0) {
+      console.warn(`[relevance-gate] Stripped ${withinBudget.length} products (minimal reply: "${replyText}")`);
     }
 
     const replyMsg: Message = {

@@ -1572,7 +1572,7 @@ STEP 0 — IS THIS A SEARCHABLE PRODUCT?
   artwork, or any non-purchasable image: DO NOT SEARCH.
   Instead reply: "Nice photo! But I'm a gift concierge — I can help you find products
   on Kapruka. Tell me what you're looking for, or describe the item in the picture."
-  If you're unsure whether it's a product, err on the side of searching.
+  If you're unsure whether it's a product, DO NOT SEARCH — ask the user to describe it.
 
 STEP 1 — EXTRACT SEARCHABLE ATTRIBUTES from the image:
   Object    : What is it exactly? (t-shirt, vase, cake, watch, toy, perfume bottle)
