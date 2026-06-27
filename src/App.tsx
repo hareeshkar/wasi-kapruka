@@ -605,12 +605,27 @@ export default function App() {
 
     // Build reply message
     const withinBudget = filterByBudget(state.linkedProducts, budget);
+
+    // ── RELEVANCE GATE: strip products if the AI's text says it found nothing ──
+    // The LLM sometimes returns product cards even when its text says "I couldn't find
+    // that" or "sorry, we don't have that". This happens when search results are from
+    // a previous query or are completely unrelated. The text is the ground truth.
+    const replyLower = (data.reply || '').toLowerCase();
+    const negativeSignals = [
+      "couldn't find", "don't have", "do not have", "sorry", "no results",
+      "no matching", "not available", "out of stock", "don't carry",
+      "can't find", "cannot find", "doesn't seem to", "doesn't have",
+      "not currently", "no exact match", "unfortunately",
+    ];
+    const hasNegativeSignal = negativeSignals.some(s => replyLower.includes(s));
+    const filteredProducts = hasNegativeSignal ? [] : withinBudget;
+
     const replyMsg: Message = {
-      id: `reply-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'assistant',
       content: data.reply,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      products: withinBudget.length > 0 ? withinBudget : undefined,
+      products: filteredProducts.length > 0 ? filteredProducts : undefined,
       city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
       order_created: state.orderCreated,
       tracking_result: state.trackingData,
@@ -620,7 +635,7 @@ export default function App() {
     void addMessage(replyMsg);
 
     // Prefetch full details for all products in the reply (background, no await)
-    if (withinBudget.length > 0) prefetchProductDetails(withinBudget);
+    if (filteredProducts.length > 0) prefetchProductDetails(filteredProducts);
 
     // Post-message deferred processing (product detail, compare, categories)
     await processDeferredTools(state);
