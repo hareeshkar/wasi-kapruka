@@ -26,13 +26,13 @@ npm-debug.log*
 *.swp
 *.swo
 
-# Playwright browser test traces (333+ files)
+# Playwright / browser test traces
 .playwright-mcp/
 
 # Test output directory (smoke tests, probe results, prod tests)
 output/
 
-# Screenshots from browser testing (54+ files)
+# Screenshots from browser testing
 *.png
 *.jpg
 *.jpeg
@@ -55,18 +55,29 @@ mcp-*.js
 # Experimental scratch files
 scratch/
 
-# Misc temp configs
+# Local dev tools
+.serena/
+.agents/
+.mcp-kapruka/
+.claude/
+
+# Local configs & docs
 metadata.json
+skills-lock.json
 checkpoint-readme.yml
 langgraph-memory.yml
 langgraph-postgres.yml
+MCP_MULTI_CURRENCY_FINDINGS.md
+MCP_REAL_FINDINGS.md
+Wasi.md
+AGENTS.md
+smoke-test.js
 
-# Claude/settings
-.claude/
+# Test output
+test_*.txt
 
 # Session storage
 .wasi-session
 
 # Vite cache
 .vite/
-test_*.txt

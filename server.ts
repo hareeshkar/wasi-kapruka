@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { callMcpTool } from './src/lib/mcp.js';
@@ -12,9 +11,6 @@ import {
 import type { LLMAdapter } from './src/lib/llm-adapter.js';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ─── Wasi System Prompt ────────────────────────────────────────────────────────
 // Per-request SESSION_CONTEXT (budget, occasion, cart, language lock) is appended
@@ -1823,6 +1819,11 @@ CRITICAL INSTRUCTIONS:
       console.error('[STT] Gemini transcription failed:', err.message);
       return res.status(500).json({ error: err.message });
     }
+  });
+
+  // ── Health Check ────────────────────────────────────────────────────────────
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', provider: llmAdapter.provider, model: llmAdapter.model });
   });
 
   // ── Static / Vite Middleware ─────────────────────────────────────────────────
