@@ -1901,8 +1901,7 @@ CRITICAL INSTRUCTIONS:
     const configScript = `<script>window.__WASI_ENV__=${JSON.stringify(runtimeConfig)}</script>`;
     const indexHtml = indexHtmlBuffer.replace('</head>', `${configScript}\n</head>`);
 
-    app.use(express.static(distPath));
-    // Serve the modified index.html for all non-file routes (SPA fallback)
+    app.use(express.static(distPath, { index: false }));
     app.get('*', (_req, _res) => {
       _res.type('html').send(indexHtml);
     });
