@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'; // or global fetch since Node 18+
+// Node.js 18+ has native fetch — no import needed
 
 const MCP_ENDPOINT = 'https://mcp.kapruka.com/mcp';
 
@@ -340,18 +340,21 @@ export async function callMcpTool(toolName: string, args: any, forceDemo: boolea
 
 // ── Circuit Breaker ──────────────────────────────────────────────────────────
 // After 3 consecutive failures, stop calling MCP for 30 seconds.
+// 429 (rate limit) failures use a longer cooldown (60s) since the MCP needs time.
 // This prevents cascading failures and reduces load on a struggling backend.
 const circuitBreaker = {
   failures: 0,
   openUntil: 0,
   threshold: 3,
   cooldownMs: 30_000,
+  rateLimitCooldownMs: 60_000,
   recordSuccess() { this.failures = 0; },
-  recordFailure() {
+  recordFailure(isRateLimit: boolean = false) {
     this.failures++;
     if (this.failures >= this.threshold) {
-      this.openUntil = Date.now() + this.cooldownMs;
-      console.warn(`[MCP] Circuit OPEN — ${this.failures} consecutive failures. Pausing for ${this.cooldownMs / 1000}s.`);
+      const cooldown = isRateLimit ? this.rateLimitCooldownMs : this.cooldownMs;
+      this.openUntil = Date.now() + cooldown;
+      console.warn(`[MCP] Circuit OPEN — ${this.failures} consecutive failures. Pausing for ${cooldown / 1000}s.`);
     }
   },
   isOpen(): boolean {
@@ -621,7 +624,22 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
         if (attempts < 2) continue; // retry loop
       }
 
+      if (res.status === 429) {
+        // Rate limited — don't invalidate session, just wait and retry
+        const retryAfter = res.headers.get('retry-after');
+        const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : 5000;
+        console.warn(`[MCP] Rate limited (429). Waiting ${waitMs}ms before retry.`);
+        await new Promise(r => setTimeout(r, waitMs));
+        if (attempts < 2) continue;
+      }
+
       if (!res.ok) {
+        const isRateLimit = res.status === 429;
+        if (isRateLimit) {
+          const retryAfter = res.headers.get('retry-after');
+          console.warn(`[MCP] Rate limited (429). Retry-After: ${retryAfter || 'not set'}`);
+        }
+        circuitBreaker.recordFailure(isRateLimit);
         throw new Error(`MCP returned HTTP status ${res.status}`);
       }
 
@@ -714,7 +732,7 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
 
     } catch (error) {
       console.warn(`Mcp query of '${toolName}' failed: ${(error as any).message}. Utilizing bulletproof simulated fallback.`);
-      circuitBreaker.recordFailure();
+      circuitBreaker.recordFailure((error as any).message?.includes('429'));
       if (attempts >= 2) {
         return simulateMcpTool(toolName, args);
       }
@@ -827,68 +845,25 @@ function simulateMcpTool(toolName: string, args: any): any {
   const todayStr = now.toISOString().split('T')[0];
 
   switch (toolName) {
+    // Product search and lookup are NOT simulated — a hardcoded product list
+    // only covers a handful of categories and causes the LLM to silently lie
+    // ("nothing found") for everything else (groceries, clothing, electronics…).
+    // Return a clear service-unavailable payload so the LLM can give an honest
+    // response and the caller can tell degraded mode from a real empty result.
     case 'kapruka_search_products': {
-      const q = (args.q || args.query || '').toLowerCase().trim();
-      const category = (args.category || '').toLowerCase().trim();
-
-      let results = [...FALLBACK_PRODUCTS];
-      if (category) {
-        results = results.filter(p => p.category.toLowerCase() === category);
-      }
-      if (q && q !== '*') {
-        results = results.filter(p =>
-          p.name.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
-        );
-      }
-      if (typeof args.min_price === 'number') {
-        results = results.filter(p => p.price_lkr >= args.min_price);
-      }
-      if (typeof args.max_price === 'number') {
-        results = results.filter(p => p.price_lkr <= args.max_price);
-      }
-
-      const limit = args.limit || 8;
-      const sliced = results.slice(0, limit);
-
-      // Normalize to MCP search response shape
-      const mapped = sliced.map((p: any) => ({
-        id: p.product_code,
-        name: p.name,
-        summary: p.description,
-        price: { amount: p.price_lkr, currency: 'LKR' },
-        compare_at_price: null,
-        in_stock: p.stock_level !== 'out',
-        stock_level: p.stock_level,
-        image_url: p.image_url,
-        category: { id: 'cat_general', name: p.category, slug: p.category.toLowerCase() },
-        rating: p.rating,
-        ships_internationally: true,
-        url: p.url
-      }));
-
+      console.warn('[MCP SIMULATOR] kapruka_search_products: returning unavailable — live MCP unreachable');
       return {
-        results: mapped,
-        next_cursor: sliced.length < results.length ? 'eyJ1IjoiTWc9PSIsInAiOjJ9' : null,
-        applied_filters: { q, limit, in_stock_only: true },
+        results: [],
+        next_cursor: null,
         _simulated: true,
+        _unavailable: true,
+        error: 'Product catalog temporarily unavailable — please try again in a moment.',
       };
     }
 
     case 'kapruka_get_product': {
-      const pid = args.product_code || args.product_id || args.id;
-      const found = FALLBACK_PRODUCTS.find(p =>
-        p.product_code.toLowerCase() === (pid || '').toLowerCase()
-      );
-      if (!found) {
-        const foundVar = FALLBACK_PRODUCTS.find(p =>
-          p.variants && p.variants.some((v: any) => v.id.toLowerCase() === (pid || '').toLowerCase())
-        );
-        if (!foundVar) throw new Error('Product not found: ' + pid);
-        return buildFullProductShape(foundVar);
-      }
-      return buildFullProductShape(found);
+      console.warn('[MCP SIMULATOR] kapruka_get_product: returning unavailable — live MCP unreachable');
+      throw new Error('Product catalog temporarily unavailable — please try again in a moment.');
     }
 
     case 'kapruka_list_categories': {

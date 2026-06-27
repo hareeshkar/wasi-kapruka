@@ -860,7 +860,12 @@ CART NON-EMPTY + USER ASKS FOR PRODUCTS:
 ════════════════════════════════════════════════════════════
 §11  ERROR RECOVERY PLAYBOOK
 ════════════════════════════════════════════════════════════
-T1 empty results:
+T1 service unavailable (_unavailable:true in result OR error field present):
+  DO NOT say "nothing found" or "not in stock". The catalog is temporarily unreachable.
+  Say EXACTLY: "The product catalog is having a brief hiccup — please try again in a moment! 🙏"
+  Do NOT suggest alternatives or change topic. Just ask them to retry.
+
+T1 empty results (results:[] but NO _unavailable flag — catalog reachable, genuinely 0 hits):
   Try synonym from INTENT MAP before giving up.
   Tell user: "I tried '[query]' but got no results — trying '[synonym]'..."
   If still empty: "Kapruka doesn't stock [X] right now. How about [alternative]?"
@@ -1600,6 +1605,7 @@ STEP 2 — MAP TO KAPRUKA'S CATEGORIES (use these as the "category" param in T1)
   "Perfumes"     → cologne, body spray, fragrance sets
   "Sports"       → fitness gear, sports accessories
   "BabyItems"    → baby clothes, toys, essentials
+  "Grocery"      → rice, fruit, vegetables, oil, packaged food, pantry items
 
 STEP 3 — FIRE 2-3 SEARCHES IN PARALLEL (T1 calls):
   Search 1 (specific): colour + object + category
@@ -1831,8 +1837,10 @@ CRITICAL INSTRUCTIONS:
       }
 
       // ── LLM-BASED RELEVANCE GATE ─────────────────────────────────────────────
-      // After the main LLM call, validate that returned products are actually relevant
-      // to the user's request. Uses a lightweight Gemini call — no hardcoding.
+      // Strips products that are clearly wrong-category for the user's request.
+      // Uses a lightweight Gemini call — no hardcoding.
+      // Skips when: no search results, no user context (voice-only/image-only),
+      // or when the query text is fewer than 4 chars (too ambiguous to filter reliably).
       if (toolCalls && toolCalls.length > 0) {
         const searchCalls = toolCalls.filter((tc: any) => tc.toolName === 'kapruka_search_products');
         const allProducts: { tc: any; p: any; idx: number }[] = [];
@@ -1842,24 +1850,37 @@ CRITICAL INSTRUCTIONS:
           results.forEach((p: any, idx: number) => allProducts.push({ tc: sc, p, idx }));
         }
 
-        if (allProducts.length > 0 && message) {
+        // Build the best available user intent signal:
+        // - text message (most precise)
+        // - LLM's own search queries as a fallback context (voice/vision where message is empty)
+        const searchQueries = searchCalls.map((sc: any) => sc.args?.q || sc.args?.params?.q).filter(Boolean);
+        const intentText = (message || '').trim() || searchQueries.join(', ');
+
+        // Only run the gate when we have enough context to filter reliably.
+        // Short single-word intents like "grocery" or "rice" are too ambiguous —
+        // the filter model may strip correct results thinking the category doesn't match.
+        const shouldFilter = allProducts.length > 0 && intentText.length >= 4;
+
+        if (shouldFilter) {
           try {
             const productList = allProducts.map(({ p }, i) =>
               `${i}: "${p.name}" [${p.category?.name || p.category || 'unknown'}]`
             ).join('\n');
 
             const filterPrompt = [
-              'You are a product relevance filter. The user asked for something.',
-              `User request: "${message.substring(0, 200)}"`,
+              'You are a product relevance filter for an e-commerce platform.',
+              `User intent: "${intentText.substring(0, 300)}"`,
               '',
-              'Products found by search:',
+              'Products returned by search:',
               productList,
               '',
-              'Reply with ONLY the indices (comma-separated) of products that are genuinely',
-              'relevant to what the user asked for. If a product is from a completely different',
-              'category (e.g. user asked for clothing but got a cake), exclude it.',
-              'If ALL products are relevant, reply "all".',
-              'If NONE are relevant, reply "none".',
+              'Rules:',
+              '- Keep a product if it reasonably matches what the user wants, even broadly.',
+              '- Remove ONLY products that are clearly from a completely wrong category',
+              '  (e.g. user wants "shirt" but result is a birthday cake).',
+              '- When in doubt, KEEP the product — false negatives hurt more than false positives.',
+              '- Reply with ONLY the indices (comma-separated) to keep.',
+              '- If ALL are relevant, reply "all". If NONE are relevant, reply "none".',
             ].join('\n');
 
             const filterResult = await llmAdapter.chat(
@@ -1870,7 +1891,7 @@ CRITICAL INSTRUCTIONS:
             const filterReply = (filterResult.reply || '').trim().toLowerCase();
             let keepIndices: Set<number>;
 
-            if (filterReply === 'all') {
+            if (filterReply === 'all' || filterReply === '') {
               keepIndices = new Set(allProducts.map((_, i) => i));
             } else if (filterReply === 'none') {
               keepIndices = new Set();
@@ -1878,9 +1899,14 @@ CRITICAL INSTRUCTIONS:
               keepIndices = new Set(
                 filterReply.split(/[^0-9]+/).map(Number).filter(n => !isNaN(n) && n < allProducts.length)
               );
+              // Safety: if filter wiped everything, don't strip — keep all
+              if (keepIndices.size === 0) {
+                console.warn(`[RelevanceGate] Filter returned empty set for intent "${intentText}" — keeping all results`);
+                keepIndices = new Set(allProducts.map((_, i) => i));
+              }
             }
 
-            // Group products by their parent tool call and filter
+            // Apply filter per-tool-call
             const byTc = new Map<any, number[]>();
             allProducts.forEach(({ tc }, i) => {
               if (!byTc.has(tc)) byTc.set(tc, []);
@@ -1891,7 +1917,7 @@ CRITICAL INSTRUCTIONS:
               const results = Array.isArray(tc.result) ? tc.result : (tc.result?.results ?? []);
               const filtered = indices.filter(i => keepIndices.has(i)).map(i => allProducts[i].p);
               if (filtered.length < results.length) {
-                console.log(`[RelevanceGate] LLM stripped ${results.length - filtered.length}/${results.length} products for query "${tc.args?.q}"`);
+                console.log(`[RelevanceGate] stripped ${results.length - filtered.length}/${results.length} for intent="${intentText}" query="${tc.args?.q || tc.args?.params?.q}"`);
                 if (Array.isArray(tc.result)) {
                   tc.result = filtered;
                 } else {
@@ -1900,8 +1926,7 @@ CRITICAL INSTRUCTIONS:
               }
             }
           } catch (filterErr: any) {
-            // If the filter fails, keep original results — don't break the chat
-            console.warn('[RelevanceGate] LLM filter failed, keeping original results:', filterErr.message);
+            console.warn('[RelevanceGate] filter failed, keeping all results:', filterErr.message);
           }
         }
       }

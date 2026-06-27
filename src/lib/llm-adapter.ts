@@ -725,6 +725,11 @@ class OpenAIAdapter implements LLMAdapter {
   private compactForModel(name: string, result: any): any {
     try {
       if (name === 'kapruka_search_products') {
+        // Pass through service-unavailable payloads unchanged so the LLM
+        // sees the error field and responds with "try again" rather than "nothing found".
+        if (result?._unavailable || result?.error) {
+          return { results: [], error: result.error ?? 'Product catalog temporarily unavailable.' };
+        }
         const arr = Array.isArray(result) ? result : result?.results;
         if (Array.isArray(arr)) {
           const compactItems = arr.map((p: any) => ({
