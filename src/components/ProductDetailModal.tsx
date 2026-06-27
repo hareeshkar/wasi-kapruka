@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X, ChevronLeft, ChevronRight, Check, Plus, ExternalLink,
-  Package, Globe, Truck, Scale, Building2, Tag, AlertTriangle,
+  Globe, Truck, Scale, Building2, Tag, AlertTriangle,
   ShieldCheck, Hash,
 } from 'lucide-react';
 import { formatPrice, getCurrencySymbol, detectCurrency, type Currency } from '../lib/currency';
+import { KAPRUKA } from '../lib/kapruka';
 import { Product, ProductVariant } from '../types';
 
 interface Props {
@@ -241,8 +242,8 @@ export default function ProductDetailModal({
                 onError={() => setImgErrs(p => new Set(p).add(imgIdx))}
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Package className="w-14 h-14 text-gray-200" />
+              <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f0ecf5 0%, #e8e4ef 100%)' }}>
+                <img src={KAPRUKA.logo} alt="" draggable={false} className="w-16 h-auto opacity-20" />
               </div>
             )}
 
@@ -313,8 +314,8 @@ export default function ProductDetailModal({
                       onError={() => setImgErrs(p => new Set(p).add(i))}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                      <Package className="w-4 h-4 text-gray-300" />
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f0ecf5 0%, #e8e4ef 100%)' }}>
+                      <img src={KAPRUKA.logo} alt="" draggable={false} className="w-6 h-auto opacity-20" />
                     </div>
                   )}
                 </button>

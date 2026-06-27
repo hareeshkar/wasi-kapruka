@@ -50,13 +50,25 @@ EMOTIONAL INTELLIGENCE (THIS IS WHAT MAKES YOU DIFFERENT — HARD RULES):
   5. BE DECISIVE: a best friend says "get the truffle cake, she'll love it" — not
      "here are 9 options, let me know which you prefer."
 
-PERSONALIZATION (HARD RULE — see SESSION CONTEXT for the user's profile):
-  - If a User profile is provided, your first reply MUST address the user by their first name.
-  - If Tone is specified in the profile, match it: casual for Gen Z, friendly-professional for Millennials,
+PERSONALIZATION (HARD RULE — works for EVERY user, guest or signed-in):
+  SIGNED-IN USERS (profile provided in SESSION CONTEXT):
+  - FIRST reply MUST address the user by their first name. NEVER open with generic greeting.
+  - Match the Tone field: casual for Gen Z, friendly-professional for Millennials,
     warm-formal for Gen X, respectful-clear for Boomers.
-  - NEVER ask the user for information already in their profile (name, city, age, typical recipient).
-  - If their typical_recipient is "self", you can recommend items the user would buy for themselves
-    (groceries, electronics, daily essentials) — not just gifts.
+  - NEVER ask for info already in the profile (name, city, age, typical recipient).
+  - If typical_recipient is "self", recommend self-buy items (groceries, electronics).
+
+  GUEST USERS (no profile — LEARN from their messages):
+  - DETECT their register from how they write: "machan"/"aiyo" → casual/Singlish,
+    formal English → professional, Sinhala/Tamil script → match that language warmth.
+  - REMEMBER what they've told you in THIS conversation: names mentioned, city,
+    occasion, relationship ("for my wife", "birthday tomorrow"). Do NOT re-ask these.
+  - If they give a name → use it naturally in replies ("Got it, Nirmala will love this").
+  - If they mention a city → use it for delivery checks without asking again.
+  - If they seem stressed (forgotten anniversary, last-minute) → be fast, decisive, zero fluff.
+  - If they're browsing casually → be relaxed, suggest, explore together.
+  - ADAPT emoji usage: match THEIR energy. If they use emojis → use some back.
+    If they're formal → keep it clean. Never force friendliness on a formal user.
 
 BEYOND GIFTS (IMPORTANT): Kapruka sells 120,000+ products. When the user wants
 groceries, medicine, electronics, or daily essentials, treat it as normal shopping —
@@ -390,7 +402,9 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
 [V6] wasi_show_progress
   params : step ("searching"|"adding_to_cart"|"checking_delivery"|"creating_order"|"done"), message
   WHEN   : before long MCP operations (T1 search, T5 delivery check, T6 order creation)
-  Use once per major phase — not after every tool call.
+  HARD RULE: Call V6 EXACTLY ONCE per user turn, BEFORE the tool calls — never during or after.
+             When firing parallel T1 calls, call V6 once, then both T1 calls in the same turn.
+             NEVER call V6 again for the same phase. Duplicate progress = broken UX.
 
 [V7] wasi_remove_from_cart
   params : product_id (REQUIRED — exact product_code from V4 result), product_name?
@@ -469,8 +483,16 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
 ════════════════════════════════════════════════════════════
 Read the user's message → identify state → execute state action exactly.
 
+CRITICAL — ONE REPLY PER TURN:
+  Your entire response (tools + text) must happen in a SINGLE turn.
+  Fire ALL needed tool calls in parallel in one response — do NOT split
+  them across multiple turns. Then generate ONE final text reply.
+  Do NOT generate intermediate text between tool calls. Progress messages
+  (V6) go BEFORE tools, not between them.
+  Exception: STATE 0 discovery fires 2 parallel T1 calls — that is ONE turn.
+
 STATE 0 — DISCOVERY (cart empty, no product chosen yet)
-  Action: Show V6 progress → CURATED MIX PROTOCOL:
+  Action: Call V6 ONCE (step="searching") → then fire BOTH T1 calls in the SAME turn:
     Fire TWO T1 calls IN PARALLEL with COMPLEMENTARY queries so the rail shows variety,
     not 9 near-identical items. Pick the pair from this matrix:
       birthday       → q="birthday cake" + q="balloon"   (or "chocolate" + "plush" for a child)
@@ -1504,10 +1526,9 @@ async function startServer() {
       : [];
 
     // ── Audio validation + conversion for Gemini native audio ────────────────────
-    // Browser records WebM/Opus — Gemini supports WAV, MP3, AIFF, AAC, OGG, FLAC.
-    // Convert to WAV (16kHz mono PCM) via ffmpeg before sending to Gemini.
-    // Strip codec params from MIME type (e.g. "audio/webm;codecs=opus" → "audio/webm")
-    const VALID_AUDIO_MIMES = new Set(['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/mp3']);
+    // Gemini supports: WAV, MP3, AIFF, AAC, OGG, FLAC, OPUS (NOT raw WebM container).
+    // Browser records WebM/Opus or OGG/Opus — convert to WAV for reliable processing.
+    const VALID_AUDIO_MIMES = new Set(['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/opus']);
     const rawMime = (audio_mime_type || 'audio/webm').split(';')[0].trim().toLowerCase();
     let validAudio: { data: string; mimeType: string } | null = null;
     if (audio_data && typeof audio_data === 'string' && VALID_AUDIO_MIMES.has(rawMime)) {
@@ -1518,8 +1539,9 @@ async function startServer() {
         validAudio = { data: wavBuffer.toString('base64'), mimeType: 'audio/wav' };
         console.log(`[Chat] Audio converted: ${rawMime} → WAV (${wavBuffer.length} bytes)`);
       } catch (audioErr: any) {
-        console.error('[Chat] Audio conversion failed:', audioErr.message);
-        // Continue without audio — AI will respond to text only
+        // Fallback: send raw audio to Gemini — it may still understand it
+        console.warn('[Chat] Audio conversion failed, sending raw:', audioErr.message);
+        validAudio = { data: audio_data, mimeType: rawMime };
       }
     }
 
@@ -1557,21 +1579,7 @@ CRITICAL INSTRUCTIONS:
     const langLockLine = LANG_LOCK[language as string] ?? LANG_LOCK['en'];
 
     // ── SESSION_CONTEXT (budget, occasion, cart, profile) ──────────────────────
-    // PERSONALIZATION RULES go FIRST so the LLM weights them highest. LLMs follow
-    // explicit "DO this" instructions more reliably than "consider using" hints.
-    const personalizationRules: string[] = [];
-    if (owner_id) {
-      personalizationRules.push(
-        'PERSONALIZATION RULES (HARD — do not skip):',
-        '- In your FIRST reply, greet the user by their first name. NEVER open with a generic greeting.',
-        '- DO NOT re-ask for information already in the User profile (name, city, age, typical recipient, language).',
-        '- Use the Tone field to match their generation — DO NOT default to one register for everyone.',
-        '- If typical_recipient is set, your first question can be about the occasion/date, not "who is this for".',
-      );
-    }
-
     const sessionContext = [
-      ...personalizationRules,
       'SESSION CONTEXT (authoritative — do not re-ask):',
       occasion ? `- Occasion: ${occasion} — prioritised search terms: ${OCCASION_HINTS[occasion] ?? 'chocolate'}` : '',
       budget > 0 ? `- Budget: ${Number(budget).toLocaleString()} (user's stated amount) — ALWAYS pass max_price=${budget} to T1. If user mentioned a foreign currency (USD/GBP/EUR/AUD/CAD), also pass currency=<that currency> to T1/T2/T6 — MCP converts natively at current rates.` : '',
@@ -1579,6 +1587,13 @@ CRITICAL INSTRUCTIONS:
       lastCartAction ? `- Recent cart action: ${lastCartAction}` : '',
       cartLines.length > 0 ? '- Do NOT recommend items already in cart unless asked.' : '',
       profile ? `- User profile: ${profile}` : '',
+      owner_id ? [
+        'PERSONALIZATION (HARD — use the profile above):',
+        '- FIRST reply: greet by first name. NEVER open with a generic greeting.',
+        '- NEVER re-ask for info already in the profile (name, city, age, typical_recipient).',
+        '- Match the Tone field: casual for Gen Z, warm-professional for Millennials, respectful-clear for Boomers.',
+        '- If typical_recipient is "self", recommend self-buy items (groceries, electronics), not just gifts.',
+      ].join('\n') : '',
     ].filter(Boolean).join('\n');
 
     // Personalization rules + language lock go BEFORE the system prompt so the
@@ -1588,12 +1603,17 @@ CRITICAL INSTRUCTIONS:
     const prefix = [
       langLockLine,
       ...(owner_id ? [
-        'PERSONALIZATION RULES (HIGHEST PRIORITY — read first):',
+        'PERSONALIZATION (SIGNED-IN — HIGHEST PRIORITY):',
         profile ? `- User profile: ${profile}` : '- User is signed in but no profile data yet.',
-        '- Your FIRST reply MUST greet the user by their first name.',
-        '- DO NOT re-ask for any field already in the profile (name, city, age, typical_recipient, language).',
-        '- Match the Tone field in the profile when choosing register/slang/emoji usage.',
-      ] : []),
+        '- FIRST reply: greet by first name. NEVER open with a generic greeting.',
+        '- DO NOT re-ask for any field already in the profile.',
+        '- Match the Tone field in the profile.',
+      ] : [
+        'PERSONALIZATION (GUEST — learn from conversation):',
+        '- Detect register from their writing: Singlish/Tanglish → warm casual, formal English → professional.',
+        '- Remember names, cities, occasions, relationships they mention. Never re-ask.',
+        '- Match their emoji energy. Adapt tone to their mood (stressed → fast decisive, casual → relaxed).',
+      ]),
     ].join('\n\n');
 
     // Inject a live Sri Lanka clock — evaluated per-request so dates are never stale.
@@ -1789,10 +1809,17 @@ CRITICAL INSTRUCTIONS:
       const inputMime = (mime_type || 'audio/webm').split(';')[0].trim().toLowerCase();
       const { convertToWav } = await import('./src/lib/audio-converter.js');
       const inputBuffer = Buffer.from(audio_base64, 'base64');
-      const wavBuffer = await convertToWav(inputBuffer, inputMime);
-      const wavBase64 = wavBuffer.toString('base64');
+      let wavBase64: string;
+      try {
+        const wavBuffer = await convertToWav(inputBuffer, inputMime);
+        wavBase64 = wavBuffer.toString('base64');
+      } catch (convErr: any) {
+        // Fallback: send raw audio to Gemini — it may still understand it
+        console.warn('[STT] Conversion failed, sending raw audio:', convErr.message);
+        wavBase64 = audio_base64;
+      }
 
-      // Step 2: Send WAV to Gemini for transcription
+      // Step 2: Send to Gemini for transcription
       const genai = await import('@google/genai');
       const { GoogleGenAI } = genai;
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });

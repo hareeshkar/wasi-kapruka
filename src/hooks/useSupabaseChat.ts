@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { City, DeliveryCheckResult, Message, Order, OrderIntent, Product } from '../types';
 import { getOrCreateSession, supabase } from '../lib/supabase';
 
@@ -89,6 +89,23 @@ export function useSupabaseChat({ ownerId, conversationId }: UseSupabaseChatOpts
       setLoading(false);
       return;
     }
+
+    // Flush any queued messages from the optimistic temp-ID phase.
+    // Keep failed messages in the queue so they retry on next conversationId change.
+    if (!conversationId.startsWith('temp-') && pendingFlush.current.length > 0) {
+      const queued = [...pendingFlush.current];
+      pendingFlush.current = [];
+      (async () => {
+        for (const msg of queued) {
+          try {
+            await addMessage(msg);
+          } catch {
+            pendingFlush.current.push(msg);
+          }
+        }
+      })();
+    }
+
     let active = true;
     setLoading(true);
 
@@ -111,11 +128,21 @@ export function useSupabaseChat({ ownerId, conversationId }: UseSupabaseChatOpts
     };
   }, [conversationId, ownerId]);
 
+  // Queued messages that arrived before the real conversation ID (optimistic new-chat).
+  // Once the real ID arrives, these are flushed to Supabase.
+  const pendingFlush = useRef<Message[]>([]);
+
   const addMessage = useCallback(async (msg: Message, options: AddMessageOptions = {}) => {
     setMessages(prev => [...prev, msg]);
     if (options.persist === false) return;
     if (!conversationId) {
       console.warn('[supabase chat] addMessage called with no active conversation');
+      return;
+    }
+
+    // Optimistic temp ID — queue for later flush instead of trying to persist
+    if (conversationId.startsWith('temp-')) {
+      pendingFlush.current.push(msg);
       return;
     }
 

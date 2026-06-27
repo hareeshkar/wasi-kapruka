@@ -55,13 +55,31 @@ export function useConversations({ ownerId }: UseConversationsOpts) {
     budget?: number;
     language?: string;
   }): Promise<Conversation | null> => {
+    const now = new Date().toISOString();
+    // Optimistic: create a temp conversation locally so the UI is instant.
+    // The real ID comes back from Supabase and replaces the temp one.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: Conversation = {
+      id: tempId,
+      title: 'New conversation',
+      occasion: params.occasion || null,
+      budget: params.budget || null,
+      language: params.language || 'en',
+      last_message_at: now,
+      created_at: now,
+      owner_id: ownerId,
+      session_id: sessionId,
+    };
+    setConversations(prev => [optimistic, ...prev]);
+
+    // Persist to Supabase in background
     const row: Record<string, any> = {
       session_id: sessionId,
       title: 'New conversation',
       occasion: params.occasion || null,
       budget: params.budget || null,
       language: params.language || 'en',
-      last_message_at: new Date().toISOString(),
+      last_message_at: now,
     };
     if (ownerId) row.owner_id = ownerId;
 
@@ -72,10 +90,13 @@ export function useConversations({ ownerId }: UseConversationsOpts) {
       .single();
     if (error) {
       console.error('[conversations] create failed', error.message);
+      // Remove the optimistic entry so the user doesn't see a dead conversation
+      setConversations(prev => prev.filter(c => c.id !== tempId));
       return null;
     }
     const conv = data as Conversation;
-    setConversations(prev => [conv, ...prev]);
+    // Replace the temp entry with the real one
+    setConversations(prev => prev.map(c => c.id === tempId ? conv : c));
     return conv;
   }, [sessionId, ownerId]);
 

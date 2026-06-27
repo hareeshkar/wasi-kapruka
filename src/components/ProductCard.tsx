@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Product, ProductVariant } from '../types';
 import { Plus, Check, Eye } from 'lucide-react';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
+import { KAPRUKA } from '../lib/kapruka';
 
 interface ProductCardProps {
   product: Product;
@@ -18,6 +19,69 @@ const L = {
   details: { en: 'Details',         si: 'විස්තර',       ta: 'விவரம்' },
 };
 const t = (k: keyof typeof L, lang: 'en' | 'si' | 'ta') => L[k][lang] ?? L[k].en;
+
+// ── LazyImage: IntersectionObserver + blur-up fade ─────────────────────────
+function LazyImage({ src, alt, className, style }: { src: string; alt: string; className?: string; style?: React.CSSProperties }) {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  const [inView, setInView] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); obs.disconnect(); } },
+      { rootMargin: '200px' }
+    );
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const onLoad = useCallback(() => setLoaded(true), []);
+  const onError = useCallback(() => { setLoaded(true); setError(true); }, []);
+
+  return (
+    <div ref={ref} className={className} style={{ ...style, background: 'linear-gradient(135deg, #f0ecf5 0%, #e8e4ef 100%)' }}>
+      {/* Kapruka logo watermark — always visible until image loads */}
+      {!loaded && (
+        <img
+          src={KAPRUKA.logo}
+          alt=""
+          draggable={false}
+          style={{
+            position: 'absolute',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '40%', height: 'auto',
+            opacity: 0.18,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+      {inView && (
+        <img
+          src={error ? KAPRUKA.logo : src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onLoad={onLoad}
+          onError={onError}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: error ? 'contain' : 'cover',
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            padding: error ? '20%' : 0,
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function ProductCard({ product, onAddToBundle, onViewDetails, lang = 'en', compact = false, accentSide = 'right' }: ProductCardProps) {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(
@@ -53,15 +117,10 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
         }}
       >
         {/* Full-bleed product image */}
-        <img
+        <LazyImage
           src={product.image_url}
           alt={product.name}
-          referrerPolicy="no-referrer"
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=600&auto=format&fit=crop&q=60';
-          }}
+          className="absolute inset-0 w-full h-full"
         />
 
         {/* Violet gradient veil */}
@@ -168,15 +227,10 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
     >
       {/* Image */}
       <div className="relative overflow-hidden" style={{ aspectRatio: '4/3' }}>
-        <img
+        <LazyImage
           src={product.image_url}
           alt={product.name}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=600&auto=format&fit=crop&q=60';
-          }}
+          className="absolute inset-0 w-full h-full"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 

@@ -479,7 +479,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_show_progress',
-    description: 'WASI UI TOOL — Show a visual progress step in the chat interface. Call between major operations (searching, adding to cart, checking delivery, creating order) so the user sees what\'s happening. Use sparingly — once per major phase is enough.',
+    description: 'WASI UI TOOL — Show a visual progress step in the chat interface. Call BEFORE long operations (searching, checking delivery, creating order). HARD RULE: Call EXACTLY ONCE per user turn, BEFORE the tool calls — never during or after. When firing parallel searches, call this once then both searches in the same turn. Duplicate progress messages break the UI.',
     parameters: {
       type: 'object',
       properties: {
@@ -632,10 +632,10 @@ class GeminiAdapter implements LLMAdapter {
       if (response.candidates?.[0]?.content) {
         const modelContent = response.candidates[0].content;
         const fcParts = (modelContent.parts || []).filter((p: any) => p.functionCall);
-        const nonFcParts = (modelContent.parts || []).filter((p: any) => !p.functionCall);
-        if (nonFcParts.length > 0) {
-          contents.push({ role: 'model', parts: nonFcParts });
-        }
+        // Do NOT add non-FC parts (progress text) to the conversation when
+        // function calls are present — the OpenAI adapter ignores msg.content
+        // when tool_calls exist, and the Gemini adapter must do the same.
+        // Adding progress text here causes duplicate messages on the client.
         contents.push({ role: 'model', parts: fcParts });
       }
 
@@ -656,13 +656,34 @@ class GeminiAdapter implements LLMAdapter {
         })
       );
 
-      const responseParts: any[] = [];
+      // Build a key→result map so every original call ID gets a functionResponse.
+      // Gemini requires a response for EVERY functionCall ID it emitted —
+      // even deduped ones. Missing responses cause hallucinations or errors.
+      const resultByKey = new Map<string, any>();
       for (const { call, result } of results) {
-        responseParts.push({ functionResponse: { id: call.id, name: call.name, response: { result } } });
+        resultByKey.set(`${call.name}:${JSON.stringify(call.args)}`, result);
+      }
+      const responseParts: any[] = [];
+      for (const call of calls) {
+        const key = `${call.name}:${JSON.stringify(call.args)}`;
+        const result = resultByKey.get(key)!;
+        responseParts.push({ functionResponse: { id: call.id, name: call.name, response: result } });
       }
 
       contents.push({ role: 'user', parts: responseParts });
       response = await this.generateContent(contents, config);
+    }
+
+    // Loop budget exhausted — if the last response had pending function calls,
+    // execute them once so the user gets results, not a silent "Done!".
+    if (response.functionCalls?.length > 0) {
+      console.warn(`[Gemini] Loop budget exhausted with ${response.functionCalls.length} pending calls — executing final batch`);
+      for (const call of response.functionCalls) {
+        const toolCall: ToolCall = { id: call.id, name: call.name, args: call.args };
+        let result: any;
+        try { result = await executeTool(toolCall); } catch (e: any) { result = { error: e.message }; }
+        toolCallsLog.push({ toolName: call.name, args: call.args, result });
+      }
     }
 
     return { reply: response.text ?? 'Done! Check the updated results.', toolCalls: toolCallsLog };

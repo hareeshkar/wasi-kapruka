@@ -63,6 +63,8 @@ export default function App() {
 
   // Conversational state
   const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, updateMessage, sessionId } = useSupabaseChat({ ownerId, conversationId: activeConvId });
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [isStreaming, setIsStreaming] = useState(false);
 
   // Error toast state
@@ -88,42 +90,78 @@ export default function App() {
   const [expandedProduct, setExpandedProduct] = useState<Product | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Client-side cache for product details — avoids re-fetching on repeated clicks
+  const productCache = useRef<Map<string, Product>>(new Map());
+
+  // Normalize raw API product into our Product type
+  const normalizeProductDetail = (raw: any, productCode: string): Product => ({
+    product_code:     raw.id ?? raw.product_code ?? productCode,
+    name:             raw.name ?? '',
+    price_lkr:        raw.price?.amount ?? raw.price_lkr ?? 0,
+    currency:         raw.price?.currency ?? raw.currency ?? 'LKR',
+    compare_at_price: raw.compare_at_price?.amount ?? undefined,
+    category:         raw.category?.name ?? raw.category ?? '',
+    image_url:        raw.images?.[0] ?? raw.image_url ?? '',
+    description:      raw.description ?? raw.summary ?? '',
+    summary:          raw.summary ?? undefined,
+    stock_level:      raw.stock_level ?? (raw.in_stock ? 'high' : 'low'),
+    in_stock:         raw.in_stock ?? undefined,
+    rating:           raw.rating ?? undefined,
+    variants:         raw.variants?.map((v: any) => ({
+      id: v.id, name: v.name,
+      price_lkr: v.price?.amount ?? v.price_lkr ?? 0,
+      currency:  v.price?.currency ?? 'LKR',
+      stock_level: v.stock_level,
+      sku: v.sku ?? undefined,
+      in_stock: v.in_stock ?? undefined,
+      attributes: v.attributes ?? undefined,
+    })),
+    url:        raw.url ?? undefined,
+    images:     raw.images ?? [],
+    attributes: raw.attributes ?? undefined,
+    shipping:   raw.shipping ?? undefined,
+  });
+
+  // Prefetch product details in the background when search results arrive
+  const prefetchProductDetails = (products: Product[]) => {
+    for (const p of products) {
+      const code = p.product_code;
+      if (code && !productCache.current.has(code)) {
+        // Cache the basic info we already have from search
+        productCache.current.set(code, p);
+        // Fetch full details in background (fire-and-forget)
+        fetch(`/api/products/${code}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && d.product) {
+              productCache.current.set(code, normalizeProductDetail(d.product, code));
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  };
+
   // Fetch full product details for the detail modal
   const handleViewDetails = async (productCode: string) => {
-    setLoadingDetail(true);
     setExpandedProductId(productCode);
+
+    // Check cache first — instant if already prefetched
+    const cached = productCache.current.get(productCode);
+    if (cached && cached.variants) {
+      setExpandedProduct(cached);
+      setLoadingDetail(false);
+      return;
+    }
+
+    setLoadingDetail(true);
     try {
       const res = await fetch(`/api/products/${productCode}`);
       const data = await res.json();
       if (data.success && data.product) {
-        const raw = data.product;
-        setExpandedProduct({
-          product_code:     raw.id ?? raw.product_code ?? productCode,
-          name:             raw.name ?? '',
-           price_lkr:        raw.price?.amount ?? raw.price_lkr ?? 0,
-           currency:         raw.price?.currency ?? raw.currency ?? 'LKR',
-           compare_at_price: raw.compare_at_price?.amount ?? undefined,
-           category:         raw.category?.name ?? raw.category ?? '',
-           image_url:        raw.images?.[0] ?? raw.image_url ?? '',
-           description:      raw.description ?? raw.summary ?? '',
-           summary:          raw.summary ?? undefined,
-           stock_level:      raw.stock_level ?? (raw.in_stock ? 'high' : 'low'),
-           in_stock:         raw.in_stock ?? undefined,
-           rating:           raw.rating ?? undefined,
-           variants:         raw.variants?.map((v: any) => ({
-             id: v.id, name: v.name,
-             price_lkr: v.price?.amount ?? v.price_lkr ?? 0,
-             currency:  v.price?.currency ?? 'LKR',
-             stock_level: v.stock_level,
-             sku: v.sku ?? undefined,
-             in_stock: v.in_stock ?? undefined,
-             attributes: v.attributes ?? undefined,
-           })),
-           url:        raw.url ?? undefined,
-          images:     raw.images ?? [],
-          attributes: raw.attributes ?? undefined,
-          shipping:   raw.shipping ?? undefined,
-        });
+        const normalized = normalizeProductDetail(data.product, productCode);
+        productCache.current.set(productCode, normalized);
+        setExpandedProduct(normalized);
       }
     } finally {
       setLoadingDetail(false);
@@ -581,6 +619,9 @@ export default function App() {
     };
     void addMessage(replyMsg);
 
+    // Prefetch full details for all products in the reply (background, no await)
+    if (withinBudget.length > 0) prefetchProductDetails(withinBudget);
+
     // Post-message deferred processing (product detail, compare, categories)
     await processDeferredTools(state);
 
@@ -622,7 +663,7 @@ export default function App() {
     };
 
     // Capture before adding so we can detect the first message for title generation
-    const isFirstMessage = messages.length === 0;
+    const isFirstMessage = messagesRef.current.length === 0;
     // Client persists messages (it owns the rich render data — products, order
     // cards, intents). Server-side persistence is disabled to avoid bare
     // duplicate rows that lose product cards on refresh.
@@ -639,7 +680,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: messages.slice(-50).map(m => ({
+          history: messagesRef.current.slice(-50).map(m => ({
             role: m.role,
             content: m.content
               + (m.products?.length ?
@@ -757,7 +798,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: '[Voice message — the user spoke in the attached audio. Listen to the audio and respond to what they said. If you cannot process audio, use the text fallback.]',
-          history: messages.slice(-50).map(m => ({
+          history: messagesRef.current.slice(-50).map(m => ({
             role: m.role,
             content: m.content
               + (m.products?.length ?
@@ -802,7 +843,7 @@ export default function App() {
           const sttData = await sttRes.json();
           if (sttData.text?.trim()) {
             // Update the voice message with transcription content so it shows as text
-            const voiceMsgId = messages[messages.length - 1]?.id;
+            const voiceMsgId = messagesRef.current[messagesRef.current.length - 1]?.id;
             if (voiceMsgId) {
               updateMessage(voiceMsgId, { content: sttData.text.trim(), transcription: sttData.text.trim() });
             }
@@ -835,7 +876,7 @@ export default function App() {
         });
         const sttData = await sttRes.json();
         if (sttData.text?.trim()) {
-          const voiceMsgId = messages[messages.length - 1]?.id;
+          const voiceMsgId = messagesRef.current[messagesRef.current.length - 1]?.id;
           if (voiceMsgId) {
             updateMessage(voiceMsgId, { content: sttData.text.trim(), transcription: sttData.text.trim() });
           }
@@ -1030,7 +1071,7 @@ export default function App() {
             variant:     variant ? { id: variant.id, name: variant.name } : null,
             url:         (product as any).url ?? null,
           }, null, 2)}\n\nAcknowledge in ONE warm sentence. Then ask the single most useful tailored question:\n- Cake/Cheesecake → ask what icing text to write on the cake\n- Flowers/Rose/Bouquet → ask if they want a card message included\n- Chocolates/Hamper → suggest one complementary add-on within budget\n- Anything else → ask who the recipient is if not yet known`,
-          history: messages.slice(-30).map(m => ({
+          history: messagesRef.current.slice(-30).map(m => ({
             role: m.role,
             content: m.content + (m.products?.length ?
               '\n[Products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
