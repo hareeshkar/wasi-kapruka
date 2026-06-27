@@ -1564,18 +1564,57 @@ async function startServer() {
 
     // ── Vision prompt suffix (Gemini sees the image + this instruction) ────────
     const visionSuffix = validImages.length > 0
-      ? `\n\n--- VISION MODE ACTIVATED (${validImages.length} image${validImages.length > 1 ? 's' : ''} attached) ---
-The user has uploaded an image. Study it with extreme care:
-1. IDENTIFY the primary object (type, category, sub-category).
-2. DESCRIBE visual attributes: colour palette, material/texture, shape, size estimate, style (modern/classic/rustic/luxury), patterns/print, brand labels.
-3. TRANSLATE those visual attributes into the best Kapruka search strategy:
-   - Pick the MOST SPECIFIC search term (e.g. "ceramic vase" not just "vase").
-   - Choose the most relevant category filter (Household, Flowers, Cakes, Softtoy, etc.).
-   - If the image shows a branded product, include the brand in the query.
-4. RESPOND in ONE warm sentence describing what you see, then immediately call kapruka_search_products.
-5. If the image is NOT a product (selfie, landscape, pet, etc.), tell the user gently and ask them to describe what they are looking for instead.
+      ? `\n\n--- VISION MODE (${validImages.length} image${validImages.length > 1 ? 's' : ''} attached) ---
+The user uploaded a photo and wants to find SIMILAR or RELATED products on Kapruka.
 
-Example flow: "That is a stunning blue-glazed ceramic vase with gold trim!" → kapruka_search_products(q: "ceramic vase", category: "Household")
+STEP 1 — EXTRACT SEARCHABLE ATTRIBUTES from the image:
+  Object    : What is it exactly? (t-shirt, vase, cake, watch, toy, perfume bottle)
+  Colour    : Be precise. "Navy blue" not "blue". "Dusty rose" not "pink". "Charcoal" not "grey".
+  Material  : Cotton, silk, ceramic, leather, plush, metal, glass, wood?
+  Style     : Casual, formal, modern, vintage, luxury, sporty, cute?
+  Category  : What Kapruka category does this map to? See category map below.
+  Gender    : Men's, women's, kids, unisex? If visible.
+  Brand     : Any visible logo or brand name?
+
+STEP 2 — MAP TO KAPRUKA'S CATEGORIES (use these as the "category" param in T1):
+  "Clothing"     → t-shirts, shirts, dresses, pants, jackets
+  "Fashion"      → sunglasses, hats, belts, bags, scarves, ties
+  "Jewellery"    → rings, necklaces, bracelets, earrings
+  "Cosmetics"    → makeup, perfume, skincare, beauty
+  "Electronic"   → phones, headphones, speakers, watches, chargers
+  "Softtoy"      → plush toys, stuffed animals, teddy bears
+  "Household"    → vases, mugs, kitchen items, decor
+  "Flowers"      → bouquets, arrangements, plants
+  "Cakes"        → birthday cakes, cupcakes, cheesecakes
+  "Chocolates"   → chocolate boxes, truffles, gifts
+  "Giftset"      → curated gift boxes, hampers
+  "Books"        → novels, children's books, stationery
+  "KidsToys"     → toys, games, puzzles
+  "Perfumes"     → cologne, body spray, fragrance sets
+  "Sports"       → fitness gear, sports accessories
+  "BabyItems"    → baby clothes, toys, essentials
+
+STEP 3 — FIRE 2-3 SEARCHES IN PARALLEL (T1 calls):
+  Search 1 (specific): colour + object + category
+    e.g. user uploads blue t-shirt → q="blue tshirt", category="Clothing"
+  Search 2 (broader): object without colour, different category
+    e.g. q="men shirt", category="Fashion"
+  Search 3 (fallback): gift-related alternative
+    e.g. q="blue gift", category="Giftset"
+  ALWAYS pass: limit=6, in_stock_only=true, sort="bestseller"
+  If budget is known: pass max_price=budget
+
+STEP 4 — QUALITY FILTER BEFORE RESPONDING:
+  ONLY show results that are GENUINELY related to the uploaded image.
+  BAD: User uploads blue t-shirt → shows blueberry cheesecake (wrong category entirely)
+  GOOD: User uploads blue t-shirt → shows blue polo shirt, blue cap, blue accessories
+  If ALL search results are irrelevant, say honestly: "Kapruka doesn't have that exact
+  item, but here are some alternatives in the same style/colour" — and show only the
+  closest matches. NEVER pad results with unrelated items.
+
+STEP 5 — RESPOND:
+  ONE sentence: "I see a [detailed description]! Here's what I found on Kapruka:"
+  Then show the search results. Cards handle the rest.
 ---`
       : '';
 
