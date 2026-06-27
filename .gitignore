@@ -8,13 +8,13 @@ build/
 dist/
 coverage/
 
-# OS files
-.DS_Store
-Thumbs.db
-
 # Environment (keep .env.example)
 .env
 .env.*
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # Logs
 *.log
@@ -29,28 +29,32 @@ npm-debug.log*
 # Playwright / browser test traces
 .playwright-mcp/
 
-# Test output directory (smoke tests, probe results, prod tests)
+# Test output & results
 output/
+test_*.txt
+test_handshake_output.txt
+test_output.txt
+spock-output.json
 
-# Screenshots from browser testing
+# Screenshots / media from testing
 *.png
 *.jpg
 *.jpeg
 *.webp
+screenshot-sanity.jpg
 
-# Spock test output
-spock-output.json
-
-# MCP exhaustive probe outputs (large JSON dumps)
+# MCP probe outputs & temp scripts
 mcp-EXHAUSTIVE-raw.json
 mcp-FINAL-raw.json
 mcp-live-*.json
-
-# Temp probe scripts
 mcp-*.ts
 mcp-*.mjs
 mcp-*.js
 !spock-test.js
+
+# Test scripts (local only)
+smoke-test.js
+spock-test.js
 
 # Experimental scratch files
 scratch/
@@ -60,21 +64,22 @@ scratch/
 .agents/
 .mcp-kapruka/
 .claude/
+assets/.aistudio/
 
-# Local configs & docs
+# Local configs
 metadata.json
 skills-lock.json
+
+# Local docs & plans (never deploy)
 checkpoint-readme.yml
 langgraph-memory.yml
 langgraph-postgres.yml
 MCP_MULTI_CURRENCY_FINDINGS.md
 MCP_REAL_FINDINGS.md
+WASI_ENTERPRISE_PLAN.md
+WASI_PRODUCTION_PLAN.md
 Wasi.md
 AGENTS.md
-smoke-test.js
-
-# Test output
-test_*.txt
 
 # Session storage
 .wasi-session
