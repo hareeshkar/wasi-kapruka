@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { callMcpTool } from './src/lib/mcp.js';
@@ -1887,9 +1888,23 @@ CRITICAL INSTRUCTIONS:
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    const indexHtmlPath = path.join(distPath, 'index.html');
+    const indexHtmlBuffer = fs.readFileSync(indexHtmlPath, 'utf-8');
+
+    // Inject runtime env vars into index.html so the client-side code can read them.
+    // Vite embeds VITE_* vars at build time, but Docker builds don't have access to
+    // Render's runtime env vars. This injection makes them available at runtime.
+    const runtimeConfig = {
+      SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
+      SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '',
+    };
+    const configScript = `<script>window.__WASI_ENV__=${JSON.stringify(runtimeConfig)}</script>`;
+    const indexHtml = indexHtmlBuffer.replace('</head>', `${configScript}\n</head>`);
+
     app.use(express.static(distPath));
+    // Serve the modified index.html for all non-file routes (SPA fallback)
     app.get('*', (_req, _res) => {
-      _res.sendFile(path.join(distPath, 'index.html'));
+      _res.type('html').send(indexHtml);
     });
   }
 
