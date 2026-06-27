@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeSanitize from 'rehype-sanitize';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Message, Product, City, Order } from '../types';
 import { Send, ImagePlus, Play, Pause } from 'lucide-react';
@@ -44,6 +45,12 @@ interface ChatSectionProps {
 type ChatPhase = 'discovery' | 'browsing' | 'cart' | 'postorder';
 
 // ── Constants ───────────────────────────────────────────────────────────────
+const UI_TEXT: Record<string, Record<'en' | 'si' | 'ta', string>> = {
+  ask:       { en: 'Describe your gift or just say the occasion…', si: 'ඔබේ තෑග්ග විස්තර කරන්න…',       ta: 'உங்கள் பரிசை விவரிக்கவும்…' },
+  waiting:   { en: 'Wasi is thinking…',                          si: 'වසි හිතනවා…',                   ta: 'வாசி யோசிக்கிறார்…' },
+};
+const t = (k: keyof typeof UI_TEXT, lang: 'en' | 'si' | 'ta') => UI_TEXT[k]?.[lang] ?? UI_TEXT[k]?.en ?? k;
+
 const QUICK_PICKS: Record<ChatPhase, Record<'en' | 'si' | 'ta', string[]>> = {
   discovery: {
     en: ['Birthday gift', 'Groceries', 'I messed up — help', 'Track my order'],
@@ -454,7 +461,7 @@ export default function ChatSection({
                           <div className="ai-prose">
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
-                              rehypePlugins={[rehypeHighlight]}
+                              rehypePlugins={[rehypeHighlight, rehypeSanitize]}
                               components={{
                                 img: ({ src, alt }) => src ? (
                                   <div className="my-2">
@@ -494,10 +501,10 @@ export default function ChatSection({
                         </div>
                       )}
 
-                      {/* Retry button on hover */}
+                      {/* Retry button — always visible on mobile, hover on desktop */}
                       {!isUser && !isProgressMessage(msg.content) && onRetryMessage && (
                         <button onClick={() => onRetryMessage(msg.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex items-center gap-1 text-[10px] text-ink-faint hover:text-violet cursor-pointer">
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1 flex items-center gap-1 text-[10px] text-ink-faint hover:text-violet cursor-pointer">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
@@ -509,10 +516,12 @@ export default function ChatSection({
 
                       {/* Product strip */}
                       {msg.products && msg.products.length > 0 && (
-                        <div className="flex gap-3 overflow-x-auto pb-2 pt-1 snap-x snap-mandatory scrollbar-none mt-2">
+                        <div className="flex gap-3 overflow-x-auto pb-2 pt-1 snap-x snap-mandatory scrollbar-none mt-2" role="list" aria-label="Product results">
                           {msg.products.map((product, i) => (
-                            <ProductCard key={product.product_code || i} product={product} compact
+                            <div role="listitem" key={product.product_code || i}>
+                            <ProductCard product={product} compact
                               onAddToBundle={onAddToBundle} onViewDetails={onViewDetails ? () => onViewDetails(product.product_code) : undefined} />
+                            </div>
                           ))}
                         </div>
                       )}
@@ -670,15 +679,16 @@ export default function ChatSection({
               </button>
 
               <TextareaAutosize
+                className="flex-1 bg-transparent text-ink text-[14px] leading-relaxed resize-none px-4 py-3.5 outline-none placeholder:text-ink-faint"
+                placeholder={isStreaming ? t('waiting', lang) : t('ask', lang)}
+                minRows={1}
+                maxRows={8}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                placeholder={micState === 'transcribing' ? 'Transcribing your voice\u2026' : PLACEHOLDER[lang]}
-                disabled={micState === 'transcribing'}
-                minRows={1}
-                maxRows={5}
-                className={`chat-textarea ${fontClass}`}
+                disabled={isStreaming}
+                aria-label="Ask Wasi — type your gift request"
+                role="textbox"
               />
 
               <button type="button" onClick={handleMicClick} disabled={micState === 'transcribing'}

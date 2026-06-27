@@ -655,7 +655,7 @@ export default function App() {
   // Main conversational submission hook
   const handleSendMessage = async (text: string, images?: Array<{ data: string; mimeType: string }>) => {
     const userMsg: Message = {
-      id: `user-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'user',
       content: text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

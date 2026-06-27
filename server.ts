@@ -12,6 +12,16 @@ import type { LLMAdapter } from './src/lib/llm-adapter.js';
 
 dotenv.config();
 
+// Sanitize error messages before sending to client — never leak API keys or internals
+function sanitizeError(err: any): string {
+  const msg = typeof err?.message === 'string' ? sanitizeError(err) : String(err);
+  return msg
+    .replace(/[A-Za-z0-9_-]{20,}/g, '[redacted]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/key[=:]\s*\S+/gi, 'key=[redacted]')
+    .slice(0, 200);
+}
+
 // ─── Wasi System Prompt ────────────────────────────────────────────────────────
 // Per-request SESSION_CONTEXT (budget, occasion, cart, language lock) is appended
 // dynamically in the /api/chat handler. This base prompt is provider-agnostic.
@@ -949,7 +959,7 @@ async function buildLLMAdapter(): Promise<LLMAdapter> {
       console.log(`[LLM] Gemini initialized successfully`);
       return adapter;
     } catch (err: any) {
-      console.warn(`[LLM] Gemini init failed (${err.message}), falling back to DeepSeek`);
+      console.warn(`[LLM] Gemini init failed (${sanitizeError(err)}), falling back to DeepSeek`);
     }
   }
 
@@ -1065,7 +1075,7 @@ async function startServer() {
       }
       res.json({ success: true, products });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1080,7 +1090,7 @@ async function startServer() {
       }, demoMode);
       res.json({ success: true, product });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1090,7 +1100,7 @@ async function startServer() {
       const categories = await callMcpTool('kapruka_list_categories', { depth: 2 }, getMcpMode(req));
       res.json({ success: true, categories });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1101,7 +1111,7 @@ async function startServer() {
       const cities = await callMcpTool('kapruka_list_delivery_cities', { query }, getMcpMode(req));
       res.json({ success: true, cities });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1130,7 +1140,7 @@ async function startServer() {
       // Normalize: live MCP returns 'rate' for delivery cost, frontend expects 'delivery_fee'
       res.json({ success: true, result: { ...result, delivery_fee: result.rate ?? result.delivery_fee ?? 0 } });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1271,7 +1281,7 @@ async function startServer() {
 
       res.json({ success: true, order });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1284,7 +1294,7 @@ async function startServer() {
       }, getMcpMode(req));
       res.json({ success: true, result });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1301,7 +1311,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true, conversations: data || [] });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1326,7 +1336,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true, conversation: data });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1338,7 +1348,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1359,7 +1369,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1461,7 +1471,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true, title });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: sanitizeError(err) });
     }
   });
 
@@ -1645,7 +1655,9 @@ CRITICAL INSTRUCTIONS:
 
       console.log(`[Chat/${llmAdapter.provider}] lang=${language ?? 'en'} occasion=${occasion ?? '-'} budget=${budget ?? 0} cartItems=${cartLines.length} imgs=${validImages.length} audio=${validAudio ? 'yes' : 'no'} msg: ${message.substring(0, 60)}`);
 
-      const { reply, toolCalls } = await llmAdapter.chat(
+      // Wrap LLM call in a 90s timeout to prevent hung requests from blocking the event loop
+      const CHAT_TIMEOUT_MS = 90_000;
+      const chatPromise = llmAdapter.chat(
         effectivePrompt,
         formattedHistory,
         message,
@@ -1703,6 +1715,13 @@ CRITICAL INSTRUCTIONS:
         },
         [...validImages, ...(validAudio ? [validAudio] : [])],
       );
+
+      const { reply, toolCalls } = await Promise.race([
+        chatPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Chat request timed out')), CHAT_TIMEOUT_MS)
+        ),
+      ]);
 
       if (supabase && persist && (session_id || owner_id)) {
         // Auto-create a conversation if we don't have one yet (first chat of a thread).
@@ -1766,7 +1785,7 @@ CRITICAL INSTRUCTIONS:
         category: llmError.category,
         statusCode: llmError.statusCode,
         isRetryable: llmError.isRetryable,
-        originalMessage: err.message,
+        originalMessage: sanitizeError(err),
       });
 
       // Map error categories to HTTP status codes
@@ -1843,8 +1862,8 @@ CRITICAL INSTRUCTIONS:
       const text = response.text?.trim() ?? '';
       return res.json({ text });
     } catch (err: any) {
-      console.error('[STT] Gemini transcription failed:', err.message);
-      return res.status(500).json({ error: err.message });
+      console.error('[STT] Gemini transcription failed:', sanitizeError(err));
+      return res.status(500).json({ error: sanitizeError(err) });
     }
   });
 

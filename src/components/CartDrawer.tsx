@@ -335,7 +335,11 @@ export default function CartDrawer({
         </div>
         {cart.length > 0 && (
           <button
-            onClick={onClearCart}
+            onClick={() => {
+              if (window.confirm('Clear all items from your bundle? This cannot be undone.')) {
+                onClearCart();
+              }
+            }}
             className="text-[10px] font-mono text-rose-600 hover:underline flex items-center gap-1 cursor-pointer font-bold"
           >
             <Trash2 className="w-3 h-3" /> CLEAR

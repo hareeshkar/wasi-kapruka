@@ -648,7 +648,7 @@ class GeminiAdapter implements LLMAdapter {
 
       const results = await Promise.all(
         [...deduped.values()].map(async (call: any) => {
-          const toolCall: ToolCall = { id: call.id, name: call.name, args: call.args };
+          const toolCall: ToolCall = { id: call.id || `${call.name}-${Date.now()}`, name: call.name, args: call.args };
           let result: any;
           try { result = await executeTool(toolCall); } catch (e: any) { result = { error: e.message }; }
           toolCallsLog.push({ toolName: call.name, args: call.args, result });
@@ -667,7 +667,7 @@ class GeminiAdapter implements LLMAdapter {
       for (const call of calls) {
         const key = `${call.name}:${JSON.stringify(call.args)}`;
         const result = resultByKey.get(key)!;
-        responseParts.push({ functionResponse: { id: call.id, name: call.name, response: result } });
+        responseParts.push({ functionResponse: { id: call.id || `${call.name}-${Date.now()}`, name: call.name, response: result } });
       }
 
       contents.push({ role: 'user', parts: responseParts });

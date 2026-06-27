@@ -250,9 +250,23 @@ export function useSupabaseChat({ ownerId, conversationId }: UseSupabaseChatOpts
     if (error) console.error('[supabase chat] replace insert failed', error.message);
   }, [sessionId, ownerId, conversationId]);
 
-  const updateMessage = useCallback((msgId: string, updates: Partial<Message>) => {
+  const updateMessage = useCallback(async (msgId: string, updates: Partial<Message>) => {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, ...updates } : m));
-  }, []);
+    // Persist to Supabase so the update survives page refresh
+    if (conversationId && !conversationId.startsWith('temp-')) {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          content: updates.content,
+          metadata: updates.transcription ? { transcription: updates.transcription } : undefined,
+        })
+        .eq('conversation_id', conversationId)
+        .eq('role', 'user')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) console.error('[supabase chat] updateMessage failed', error.message);
+    }
+  }, [conversationId]);
 
   return { messages, loading, addMessage, clearMessages, replaceMessages, updateMessage, sessionId };
 }
