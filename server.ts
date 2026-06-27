@@ -1002,9 +1002,15 @@ async function startServer() {
   const llmAdapter = await buildLLMAdapter();
   console.log(`[LLM] Provider: ${llmAdapter.provider} | Model: ${llmAdapter.model}`);
 
+  // Server-side admin client — ws transport required for Node.js 20 (no native WebSocket).
+  // We never use realtime subscriptions server-side, but Supabase client inits it on creation.
+  const ws = await import('ws').then(m => m.default || m);
   const supabase =
     process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
-      ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+      ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          realtime: { transport: ws as any },
+        })
       : null;
 
   // Direct DeepSeek v4-flash call for title generation (no thinking — fast, cheap).
