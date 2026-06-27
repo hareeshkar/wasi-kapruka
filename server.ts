@@ -15,7 +15,7 @@ dotenv.config();
 
 // Sanitize error messages before sending to client — never leak API keys or internals
 function sanitizeError(err: any): string {
-  const msg = typeof err?.message === 'string' ? sanitizeError(err) : String(err);
+  const msg = typeof err?.message === 'string' ? err.message : String(err);
   return msg
     .replace(/[A-Za-z0-9_-]{20,}/g, '[redacted]')
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
@@ -1826,6 +1826,82 @@ CRITICAL INSTRUCTIONS:
           if (conv?.data?.title === 'New conversation') {
             generateConversationTitle(activeConvId, occasion, message).catch(e =>
               console.error('[title gen]', e.message));
+          }
+        }
+      }
+
+      // ── LLM-BASED RELEVANCE GATE ─────────────────────────────────────────────
+      // After the main LLM call, validate that returned products are actually relevant
+      // to the user's request. Uses a lightweight Gemini call — no hardcoding.
+      if (toolCalls && toolCalls.length > 0) {
+        const searchCalls = toolCalls.filter((tc: any) => tc.toolName === 'kapruka_search_products');
+        const allProducts: { tc: any; p: any; idx: number }[] = [];
+
+        for (const sc of searchCalls) {
+          const results = Array.isArray(sc.result) ? sc.result : (sc.result?.results ?? []);
+          results.forEach((p: any, idx: number) => allProducts.push({ tc: sc, p, idx }));
+        }
+
+        if (allProducts.length > 0 && message) {
+          try {
+            const productList = allProducts.map(({ p }, i) =>
+              `${i}: "${p.name}" [${p.category?.name || p.category || 'unknown'}]`
+            ).join('\n');
+
+            const filterPrompt = [
+              'You are a product relevance filter. The user asked for something.',
+              `User request: "${message.substring(0, 200)}"`,
+              '',
+              'Products found by search:',
+              productList,
+              '',
+              'Reply with ONLY the indices (comma-separated) of products that are genuinely',
+              'relevant to what the user asked for. If a product is from a completely different',
+              'category (e.g. user asked for clothing but got a cake), exclude it.',
+              'If ALL products are relevant, reply "all".',
+              'If NONE are relevant, reply "none".',
+            ].join('\n');
+
+            const filterResult = await llmAdapter.chat(
+              filterPrompt, [], 'validate', [],
+              async () => ({ error: 'no tools' }) as any, [],
+            );
+
+            const filterReply = (filterResult.reply || '').trim().toLowerCase();
+            let keepIndices: Set<number>;
+
+            if (filterReply === 'all') {
+              keepIndices = new Set(allProducts.map((_, i) => i));
+            } else if (filterReply === 'none') {
+              keepIndices = new Set();
+            } else {
+              keepIndices = new Set(
+                filterReply.split(/[^0-9]+/).map(Number).filter(n => !isNaN(n) && n < allProducts.length)
+              );
+            }
+
+            // Group products by their parent tool call and filter
+            const byTc = new Map<any, number[]>();
+            allProducts.forEach(({ tc }, i) => {
+              if (!byTc.has(tc)) byTc.set(tc, []);
+              byTc.get(tc)!.push(i);
+            });
+
+            for (const [tc, indices] of byTc) {
+              const results = Array.isArray(tc.result) ? tc.result : (tc.result?.results ?? []);
+              const filtered = indices.filter(i => keepIndices.has(i)).map(i => allProducts[i].p);
+              if (filtered.length < results.length) {
+                console.log(`[RelevanceGate] LLM stripped ${results.length - filtered.length}/${results.length} products for query "${tc.args?.q}"`);
+                if (Array.isArray(tc.result)) {
+                  tc.result = filtered;
+                } else {
+                  tc.result.results = filtered;
+                }
+              }
+            }
+          } catch (filterErr: any) {
+            // If the filter fails, keep original results — don't break the chat
+            console.warn('[RelevanceGate] LLM filter failed, keeping original results:', filterErr.message);
           }
         }
       }
