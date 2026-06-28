@@ -536,7 +536,12 @@ export default function ChatSection({
                       {/* Category explorer */}
                       {msg.categories && msg.categories.length > 0 && (
                         <div className="mt-2">
-                          <CategoryExplorer categories={msg.categories} onCategoryClick={(q) => onQuickReply(q)} lang={lang} />
+                          <CategoryExplorer
+                            categories={msg.categories}
+                            onCategoryClick={(q) => onQuickReply(q)}
+                            lang={lang}
+                            parentCategory={msg.parentCategory}
+                          />
                         </div>
                       )}
 

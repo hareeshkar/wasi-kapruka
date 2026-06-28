@@ -263,11 +263,9 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
 [T3] kapruka_list_categories
   params : depth (1 = top-level only, 2 = with subcategories)
    returns: { categories: [{name, url, children:[{name,url}]}] }
-   WHEN   : user is browsing without a specific intent ("what can you order?", "show categories")
-            Call wasi_show_categories (V11) to display the visual category grid.
-            When user asks "what types of X" or "subcategories in X" → call wasi_browse_subcategories.
-            When user picks a subcategory → search for it immediately with T1.
-   NEVER  : before you know what to search for; not needed before every T1 call
+   WHEN   : user is browsing WITHOUT a specific category in mind ("what can you order?", "show categories", "browse Kapruka")
+   NEVER  : when user already mentioned a category (use wasi_browse_subcategories instead)
+            not needed before every T1 call; not needed after showing subcategories
 
  [V12] wasi_browse_subcategories
    params : category (REQUIRED — exact category name)
@@ -275,7 +273,9 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
    WHEN   : user asks about types within a category ("what kinds of cakes", "subcategories in groceries",
             "what veggies do you have", "types of electronics"). MANDATORY when user mentions a category
             and wants to explore it.
-   FLOW   : wasi_show_categories → user picks category → wasi_browse_subcategories → user picks subcategory → T1 search
+   NEVER  : after you already showed subcategories — don't show the grid again
+   FLOW   : user asks "what groceries" → wasi_browse_subcategories("Grocery") → show subcategory list
+            user picks subcategory → T1 search for that subcategory
 
   ★ REAL CATEGORY NAMES (pass these as "category" in T1 to filter results):
     Product: Chocolates | Cakes | Flowers | Fruits | Giftset | combopack | Liquor

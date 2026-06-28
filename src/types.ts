@@ -129,6 +129,8 @@ export interface Message {
   compare_products?: Product[];
   /** Category tree from kapruka_list_categories. */
   categories?: Category[];
+  /** If set, renders as subcategory list view. */
+  parentCategory?: string;
   /** Product detail for inline display (triggered by LLM). */
   product_detail?: Product;
   /** Images uploaded with this message (Gemini vision). */

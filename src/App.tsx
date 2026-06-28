@@ -322,6 +322,7 @@ export default function App() {
     pendingDetailId: string | null;
     pendingCompareIds: string[] | null;
     pendingCategories: any[] | null;
+    pendingParentCategory: string | null;
     shouldClearCart: boolean;
     shouldOrderNow: boolean;
     actions: ToolAction[];
@@ -344,6 +345,7 @@ export default function App() {
     let pendingDetailId: string | null = null;
     let pendingCompareIds: string[] | null = null;
     let pendingCategories: any[] | null = null;
+    let pendingParentCategory: string | null = null;
     let shouldClearCart = false;
     let shouldOrderNow = false;
     const actions: ToolAction[] = [];
@@ -457,6 +459,7 @@ export default function App() {
       // ── V12: wasi_browse_subcategories ───────────────────────────────────
       if (tc.toolName === 'wasi_browse_subcategories' && tc.result?.subcategories) {
         pendingCategories = tc.result.subcategories;
+        pendingParentCategory = tc.result.category || null;
       }
 
       // ── V10: wasi_new_order ──────────────────────────────────────────────
@@ -482,7 +485,7 @@ export default function App() {
     return {
       linkedProducts, lastSearchCursor, suggestedCities, orderCreated,
       trackingData, currentPrefill, pendingDetailId, pendingCompareIds,
-      pendingCategories, shouldClearCart, shouldOrderNow, actions,
+      pendingCategories, pendingParentCategory, shouldClearCart, shouldOrderNow, actions,
     };
   };
 
@@ -542,7 +545,7 @@ export default function App() {
       }
     }
 
-    // wasi_show_categories → add category grid message
+    // wasi_show_categories / wasi_browse_subcategories → add category message
     if (state.pendingCategories) {
       const cats = state.pendingCategories;
       void addMessage({
@@ -551,6 +554,7 @@ export default function App() {
         content: '',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         categories: cats,
+        parentCategory: state.pendingParentCategory || undefined,
       });
     }
   };
