@@ -70,7 +70,7 @@ export default function CategoryExplorer({
           {subcategories.map((sub) => (
             <button
               key={sub.name}
-              onClick={() => onCategoryClick(`${sub.name} ${selectedCategory.name}`)}
+              onClick={() => onCategoryClick(`show me ${sub.name}`)}
               className="flex items-center gap-2 p-2.5 min-h-[44px] rounded-lg bg-white hover:bg-violet-tint border border-ink/5 hover:border-violet/20 transition-all cursor-pointer active:scale-95 group"
             >
               <span className="text-sm" role="img" aria-label={sub.name}>

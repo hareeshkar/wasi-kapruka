@@ -557,7 +557,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_browse_subcategories',
-    description: 'WASI UI TOOL — Show subcategories within a specific category. Call when user clicks a category or says "show me subcategories in X", "what types of X do you have", "browse X category".\n\nTriggers: user selects a category from the grid, or asks about types within a category (e.g. "what kinds of cakes", "types of electronics", "show me clothing options").\n\nAlways call wasi_show_categories FIRST if the user hasn\'t picked a category yet.',
+    description: 'WASI UI TOOL — MANDATORY when user asks about types within a category (e.g. "what kinds of cakes", "types of electronics", "show me clothing options", "what subcategories in groceries", "what veggies do you have"). Also call when user clicks a category from the grid.\n\nTriggers: "what types of X", "subcategories in X", "what\'s in X category", "show me X options", "browse X".\n\nAlways call wasi_show_categories FIRST if the user hasn\'t picked a category yet. After showing subcategories, search for the user\'s pick with T1.',
     parameters: {
       type: 'object',
       properties: {
