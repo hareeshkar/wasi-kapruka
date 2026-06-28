@@ -454,6 +454,11 @@ export default function App() {
         pendingCategories = tc.result.categories;
       }
 
+      // ── V12: wasi_browse_subcategories ───────────────────────────────────
+      if (tc.toolName === 'wasi_browse_subcategories' && tc.result?.subcategories) {
+        pendingCategories = tc.result.subcategories;
+      }
+
       // ── V10: wasi_new_order ──────────────────────────────────────────────
       if (tc.toolName === 'wasi_new_order') {
         shouldClearCart = true;
@@ -467,7 +472,7 @@ export default function App() {
         'wasi_prefill_checkout', 'wasi_add_to_cart', 'wasi_remove_from_cart',
         'wasi_update_cart_quantity', 'wasi_show_progress', 'wasi_order_now',
         'wasi_show_product_detail', 'wasi_compare_products', 'wasi_show_categories',
-        'wasi_new_order', 'wasi_get_form_state',
+        'wasi_browse_subcategories', 'wasi_new_order', 'wasi_get_form_state',
       ];
       if (!KNOWN_TOOLS.includes(tc.toolName)) {
         console.warn(`[processToolCalls] Unrecognized tool name: "${tc.toolName}" — result discarded. Possible LLM typo or new tool not yet integrated.`);
@@ -824,29 +829,57 @@ export default function App() {
   };
 
   // ── Voice message handler ──────────────────────────────────────────────────
-  // Sends audio to /api/chat with inlineData for Gemini native audio processing.
-  // The voice message bubble is already added by ChatSection before calling this.
+  // Voice handler — STT-first design for instant transcript display:
+  // 1. Call /api/stt immediately → show transcript in bubble before AI replies.
+  // 2. Call /api/chat with transcript text (full text-path parity, no audio tokens).
+  // 3. If STT fails → fall back to audio inlineData path (Gemini hears it natively).
   const handleSendVoice = async (audioBase64: string, mimeType: string) => {
     setIsStreaming(true);
 
-    // Capture and clear the cart-action note so it's sent once then forgotten
     const lastCartAction = lastCartActionRef.current;
     lastCartActionRef.current = '';
+
+    // ── STEP 1: Fast transcription call (shows in bubble while AI is thinking) ──
+    let transcript: string | null = null;
+    const voiceMsgId = messagesRef.current[messagesRef.current.length - 1]?.id;
+    try {
+      const sttRes = await fetch('/api/stt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio_base64: audioBase64, mime_type: mimeType }),
+      });
+      const sttData = await sttRes.json();
+      if (sttData.text?.trim()) {
+        transcript = sttData.text.trim();
+        // Show transcript in the voice bubble immediately — before AI replies
+        if (voiceMsgId) {
+          updateMessage(voiceMsgId, { content: transcript, transcription: transcript });
+        }
+        console.log('[handleSendVoice] Transcript ready:', transcript.substring(0, 80));
+      }
+    } catch (sttErr: any) {
+      console.warn('[handleSendVoice] STT pre-pass failed, falling back to audio path:', sttErr.message);
+    }
+
+    // ── STEP 2: Main chat call ─────────────────────────────────────────────────
+    // When transcript available → send as text (parity with typed messages).
+    // When transcript failed → send raw audio (Gemini hears it natively, fallback).
+    const chatHistory = messagesRef.current.slice(-50).map(m => ({
+      role: m.role,
+      content: m.content
+        + (m.products?.length ?
+          '\n[Searched products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
+        + (m.search_cursor ?
+          `\n[Pagination: more "${m.search_cursor.q}" results available — pass cursor="${m.search_cursor.cursor}" to kapruka_search_products if the user asks for more of the same]` : '')
+    }));
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: '[Voice message — the user spoke in the attached audio. Listen to the audio and respond to what they said. If you cannot process audio, use the text fallback.]',
-          history: messagesRef.current.slice(-50).map(m => ({
-            role: m.role,
-            content: m.content
-              + (m.products?.length ?
-                '\n[Searched products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
-              + (m.search_cursor ?
-                `\n[Pagination: more "${m.search_cursor.q}" results available — pass cursor="${m.search_cursor.cursor}" to kapruka_search_products if the user asks for more of the same]` : '')
-          })),
+          message: transcript ?? '[Voice message — listen to the attached audio and respond to what was said.]',
+          history: chatHistory,
           language,
           budget,
           occasion,
@@ -857,8 +890,8 @@ export default function App() {
           cart: cartForAI(),
           profile: profileToContext(profile),
           lastCartAction: lastCartAction || undefined,
-          audio_data: audioBase64,
-          audio_mime_type: mimeType,
+          // Only send audio when transcript failed (saves tokens when text available)
+          ...(!transcript ? { audio_data: audioBase64, audio_mime_type: mimeType } : {}),
           formState: orderIntent ? {
             recipient_name:   orderIntent.recipient_name   || '',
             recipient_phone:  orderIntent.recipient_phone  || '',
@@ -867,75 +900,26 @@ export default function App() {
             delivery_date:    orderIntent.delivery_date    || '',
             sender_name:      orderIntent.sender_name      || '',
           } : null,
-        })
+        }),
       });
       const data = await res.json();
       if (data.success) {
         await processAndApplyToolResponse(data);
       } else {
-        // ── Fallback: audio processing failed → try transcription as text ──────
-        console.warn('[handleSendVoice] Audio processing failed, falling back to transcription:', data.error);
-        try {
-          const sttRes = await fetch('/api/stt', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audio_base64: audioBase64, mime_type: mimeType }),
-          });
-          const sttData = await sttRes.json();
-          if (sttData.text?.trim()) {
-            // Update the voice message with transcription content so it shows as text
-            const voiceMsgId = messagesRef.current[messagesRef.current.length - 1]?.id;
-            if (voiceMsgId) {
-              updateMessage(voiceMsgId, { content: sttData.text.trim(), transcription: sttData.text.trim() });
-            }
-            // Re-send as a regular text message for AI processing
-            await handleSendMessage(sttData.text.trim());
-          } else {
-            setErrorToast({
-              message: getFriendlyErrorMessage('voice'),
-              category: 'voice',
-              isRetryable: true,
-            });
-          }
-        } catch (fallbackErr: any) {
-          console.error('[handleSendVoice] Fallback transcription also failed:', fallbackErr);
-          setErrorToast({
-            message: getFriendlyErrorMessage('voice'),
-            category: 'voice',
-            isRetryable: true,
-          });
-        }
-      }
-    } catch (err: any) {
-      // ── Network error fallback → try transcription as text ──────────────────
-      console.error('[handleSendVoice] Network error, falling back to transcription:', err);
-      try {
-        const sttRes = await fetch('/api/stt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audio_base64: audioBase64, mime_type: mimeType }),
-        });
-        const sttData = await sttRes.json();
-        if (sttData.text?.trim()) {
-          const voiceMsgId = messagesRef.current[messagesRef.current.length - 1]?.id;
-          if (voiceMsgId) {
-            updateMessage(voiceMsgId, { content: sttData.text.trim(), transcription: sttData.text.trim() });
-          }
-          await handleSendMessage(sttData.text.trim());
-        } else {
-          setErrorToast({
-            message: err.message || 'Network error',
-            category: 'network',
-            isRetryable: true,
-          });
-        }
-      } catch (fallbackErr: any) {
+        console.error('[handleSendVoice] Chat failed:', data.error);
         setErrorToast({
-          message: err.message || 'Network error',
-          category: 'network',
+          message: getFriendlyErrorMessage('voice'),
+          category: 'voice',
           isRetryable: true,
         });
       }
+    } catch (err: any) {
+      console.error('[handleSendVoice] Network error:', err);
+      setErrorToast({
+        message: err.message || 'Network error',
+        category: 'network',
+        isRetryable: true,
+      });
     } finally {
       setIsStreaming(false);
     }

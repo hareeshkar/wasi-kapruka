@@ -103,7 +103,7 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
            sort (bestseller by default; price_asc|price_desc when user asks by price),
            cursor (pagination token — max 3 pages then refine query, don't keep paginating)
   returns: { results: Product[], next_cursor, applied_filters }
-  WHEN   : user asks for gift ideas; changes occasion or budget; says "more"/"other options"/"something different"
+  WHEN   : user wants to find, browse, or buy ANY product — gifts, groceries, electronics, clothing, medicine, or anything; changes category, occasion, or budget; says "more"/"other options"/"something different"
   NEVER  : when cart is non-empty (ABSOLUTE); when already searched this turn
 
   ★ CATSYM GUARD: If any result id starts with "CATSYM" (case-insensitive), it is a category landing
@@ -222,8 +222,7 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
     If user says "cheaper X" or "budget X" or "low price X", search for "X" with max_price.
 
     MCP MIN LENGTH: query must be >= 3 chars. "tv" fails — use "television" instead.
-    MCP is a GIFT DELIVERY platform — individual grocery items (sugar, onion, milk)
-    mostly return 0. Use broad terms: "rice", "fruit", "spices", "bread".
+    Use specific terms: "rice", "fruit", "spices", "bread" — NOT "grocery" (too generic, returns 0).
 
   ★ CATEGORY FILTER — use real Kapruka category names (case-sensitive) to narrow results:
     "Electronic" → phones, gadgets, electronics (NOT "Electronics" — must be singular)
@@ -266,6 +265,8 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
   returns: { categories: [{name, url, children:[{name,url}]}] }
   WHEN   : user is browsing without a specific intent ("what can you order?", "show categories")
            Call wasi_show_categories (V11) to display the visual category grid.
+     When user clicks a category or asks "what types of X", call wasi_browse_subcategories to show subcategories.
+     When user picks a subcategory, search for it immediately with T1.
   NEVER  : before you know what to search for; not needed before every T1 call
 
   ★ REAL CATEGORY NAMES (pass these as "category" in T1 to filter results):
@@ -1116,6 +1117,22 @@ async function startServer() {
     }
   });
 
+  // ── REST: Subcategories for a specific category ──────────────────────────────
+  app.get('/api/categories/:category', async (req, res) => {
+    try {
+      const categoryName = req.params.category;
+      const categories = await callMcpTool('kapruka_list_categories', { depth: 2 }, getMcpMode(req));
+      const cats = categories?.categories ?? categories ?? [];
+      const found = cats.find((c: any) => c.name?.toLowerCase() === categoryName.toLowerCase());
+      if (!found) {
+        return res.status(404).json({ success: false, error: `Category '${categoryName}' not found` });
+      }
+      res.json({ success: true, category: found.name, subcategories: found.children || [] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: sanitizeError(err) });
+    }
+  });
+
   // ── REST: Delivery Cities ────────────────────────────────────────────────────
   app.get('/api/cities', async (req, res) => {
     try {
@@ -1567,6 +1584,23 @@ async function startServer() {
       }
     }
 
+    // ── Instant voice transcription — Option B: transcript → text path ──────────
+    // Per Context7 @google/genai docs: ai.models.generateContent with inlineData.
+    // Transcribe first so voice gets full parity with text: same chat path, same
+    // tool-calling, same relevance gate. The main LLM call stays text-only (faster).
+    // Falls back to audio inlineData path if transcription throws.
+    let audioTranscript: string | null = null;
+    if (validAudio && llmAdapter.transcribeAudio) {
+      try {
+        audioTranscript = await llmAdapter.transcribeAudio(validAudio);
+        if (audioTranscript) {
+          console.log(`[Chat] Voice transcript: "${audioTranscript.substring(0, 80)}"`);
+        }
+      } catch (transcriptErr: any) {
+        console.warn('[Chat] Transcription failed, falling back to audio inlineData path:', transcriptErr.message);
+      }
+    }
+
     // ── Vision prompt suffix (Gemini sees the image + this instruction) ────────
     const visionSuffix = validImages.length > 0
       ? `\n\n--- VISION MODE (${validImages.length} image${validImages.length > 1 ? 's' : ''} attached) ---
@@ -1634,17 +1668,18 @@ centre-frame). Mention all items briefly but search only for the primary one.
 ---`
       : '';
 
-    // ── Audio prompt suffix (Gemini sees the audio inlineData + this instruction) ──
+    // ── Audio prompt suffix ────────────────────────────────────────────────────
+    // When transcript available (Option B): text path — brief note to LLM.
+    // When transcription failed (fallback): audio inlineData is in userParts.
     const audioSuffix = validAudio
-      ? `\n\n--- AUDIO MODE ACTIVATED ---
-The user has sent a VOICE MESSAGE. The audio is attached as an inlineData part in the user message.
-CRITICAL INSTRUCTIONS:
-1. You CAN hear and understand the audio directly — it is embedded in this request.
-2. Do NOT say you cannot process audio. Do NOT ask the user to type.
-3. Listen to what the user said and respond to their request naturally.
-4. If the audio is unclear or you cannot understand it, ask the user to repeat.
-5. The audio is a voice message from the user — treat it as their spoken request.
-6. Respond as if the user TOLD you this verbally in a conversation.
+      ? audioTranscript
+        ? '\n\n[Voice message — the user\'s transcript is their message. Respond naturally.]'
+        : `\n\n--- AUDIO MODE (FALLBACK — transcription unavailable) ---
+The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user message.
+1. You CAN hear the audio directly — it is embedded in this request.
+2. Do NOT say you cannot process audio or ask the user to type.
+3. Respond to what the user said naturally, as if they typed it.
+4. If unclear, ask them to repeat.
 ---`
       : '';
 
@@ -1709,20 +1744,24 @@ CRITICAL INSTRUCTIONS:
 
     const effectivePrompt = `${prefix}\n\n${resolvedSystemPrompt}\n\n${sessionContext}\n\n${liveClock}${visionSuffix}${audioSuffix}`;
 
+    // Option B parity: voice → transcript → text path (identical to typed message).
+    // Falls back to original message (empty for voice-only) when transcription failed.
+    const effectiveMessage = audioTranscript ?? message;
+
     try {
       const formattedHistory = (history || []).map((h: any) => ({
         role:    h.role as 'user' | 'assistant',
         content: h.content as string,
       }));
 
-      console.log(`[Chat/${llmAdapter.provider}] lang=${language ?? 'en'} occasion=${occasion ?? '-'} budget=${budget ?? 0} cartItems=${cartLines.length} imgs=${validImages.length} audio=${validAudio ? 'yes' : 'no'} msg: ${message.substring(0, 60)}`);
+      console.log(`[Chat/${llmAdapter.provider}] lang=${language ?? 'en'} occasion=${occasion ?? '-'} budget=${budget ?? 0} cartItems=${cartLines.length} imgs=${validImages.length} audio=${validAudio ? (audioTranscript ? 'transcribed' : 'raw') : 'no'} msg: ${effectiveMessage.substring(0, 60)}`);
 
       // Wrap LLM call in a 90s timeout to prevent hung requests from blocking the event loop
       const CHAT_TIMEOUT_MS = 90_000;
       const chatPromise = llmAdapter.chat(
         effectivePrompt,
         formattedHistory,
-        message,
+        effectiveMessage,
         KAPRUKA_TOOL_DECLARATIONS,
         async (toolCall) => {
           console.log(`  → [Tool] ${toolCall.name}`, JSON.stringify(toolCall.args).substring(0, 120));
@@ -1773,9 +1812,26 @@ CRITICAL INSTRUCTIONS:
               return { _virtual: true, categories: [] };
             }
           }
+          // wasi_browse_subcategories — fetch subcategories for a specific category
+          if (toolCall.name === 'wasi_browse_subcategories') {
+            try {
+              const categoryName = toolCall.args?.category || '';
+              const raw = await callMcpTool('kapruka_list_categories', { depth: 2 }, false);
+              const cats = raw?.categories ?? raw ?? [];
+              const found = cats.find((c: any) => c.name?.toLowerCase() === categoryName.toLowerCase());
+              if (!found) {
+                return { _virtual: true, category: categoryName, subcategories: [], error: 'Category not found' };
+              }
+              return { _virtual: true, category: found.name, subcategories: found.children || [] };
+            } catch {
+              return { _virtual: true, category: toolCall.args?.category || '', subcategories: [] };
+            }
+          }
           return await callMcpTool(toolCall.name, toolCall.args, false); // always live
         },
-        [...validImages, ...(validAudio ? [validAudio] : [])],
+        // When transcript succeeded, voice is in the text — no audio inlineData needed.
+        // When transcription failed, pass raw audio as fallback (Gemini hears it directly).
+        [...validImages, ...(validAudio && !audioTranscript ? [validAudio] : [])],
       );
 
       const { reply, toolCalls } = await Promise.race([
@@ -1817,7 +1873,7 @@ CRITICAL INSTRUCTIONS:
         if (activeConvId) baseRow.conversation_id = activeConvId;
 
         const { error } = await supabase.from('messages').insert([
-          { ...baseRow, role: 'user',      content: message },
+          { ...baseRow, role: 'user',      content: effectiveMessage },
           { ...baseRow, role: 'assistant', content: reply, tool_calls: toolCalls ?? null },
         ]);
         if (error) console.error('[supabase chat] insert failed', error.message);
@@ -1854,7 +1910,7 @@ CRITICAL INSTRUCTIONS:
         // - text message (most precise)
         // - LLM's own search queries as a fallback context (voice/vision where message is empty)
         const searchQueries = searchCalls.map((sc: any) => sc.args?.q || sc.args?.params?.q).filter(Boolean);
-        const intentText = (message || '').trim() || searchQueries.join(', ');
+        const intentText = (effectiveMessage || '').trim() || searchQueries.join(', ');
 
         // Only run the gate when we have enough context to filter reliably.
         // Short single-word intents like "grocery" or "rice" are too ambiguous —
@@ -1931,7 +1987,7 @@ CRITICAL INSTRUCTIONS:
         }
       }
 
-      res.json({ success: true, reply, toolCalls });
+      res.json({ success: true, reply, toolCalls, ...(audioTranscript ? { transcript: audioTranscript } : {}) });
     } catch (err: any) {
       // Import error classification from LLM adapter
       const { classifyError } = await import('./src/lib/llm-adapter.js');

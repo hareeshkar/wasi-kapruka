@@ -267,6 +267,13 @@ export interface LLMAdapter {
     executeTool: (call: ToolCall) => Promise<any>,
     images?: Array<{ data: string; mimeType: string }>
   ): Promise<{ reply: string; toolCalls: Array<{ toolName: string; args: any; result: any }> }>;
+
+  /**
+   * Transcribe audio to text (Gemini-native only).
+   * Lightweight single-turn generateContent call — no tools, no history.
+   * Returns the raw transcript string. Throws on error.
+   */
+  transcribeAudio?(audio: { data: string; mimeType: string }): Promise<string>;
 }
 
 // ─── Kapruka MCP Tool Declarations ───────────────────────────────────────────
@@ -549,6 +556,17 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
     }
   },
   {
+    name: 'wasi_browse_subcategories',
+    description: 'WASI UI TOOL — Show subcategories within a specific category. Call when user clicks a category or says "show me subcategories in X", "what types of X do you have", "browse X category".\n\nTriggers: user selects a category from the grid, or asks about types within a category (e.g. "what kinds of cakes", "types of electronics", "show me clothing options").\n\nAlways call wasi_show_categories FIRST if the user hasn\'t picked a category yet.',
+    parameters: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'The category name to browse (e.g. "Automobile", "Chocolates", "Electronic", "Grocery")' }
+      },
+      required: ['category']
+    }
+  },
+  {
     name: 'wasi_new_order',
     description: 'WASI UI TOOL — Start a brand new order. Clears the cart and resets the conversation. ALWAYS call this tool when user wants a new order — never just reply with text.\n\nTriggers: "new order", "new chat", "start fresh", "fresh start", "clear cart", "empty cart", "clear everything", "begin again", "start over", "reset", "try again", "new gift", "start new", "new search", "find something else".\n\nSinhala: "aluth order ekak", "meka adinna", "puna balamu".\nTamil: "pudhiya order", "mudiyattum", "therinhu aarambikalam".\n\nAfter calling this tool, greet the user warmly and ask what they\'d like to order.',
     parameters: {
@@ -599,6 +617,25 @@ class GeminiAdapter implements LLMAdapter {
         },
       }
     );
+  }
+
+  /**
+   * Transcribe audio to text using Gemini native inline audio.
+   * Context7 docs: ai.models.generateContent with inlineData parts.
+   * Fast single-turn call — no tools, no thinking, no history.
+   */
+  async transcribeAudio(audio: { data: string; mimeType: string }): Promise<string> {
+    const contents = [{
+      role: 'user',
+      parts: [
+        { inlineData: { mimeType: audio.mimeType, data: audio.data } },
+        { text: 'Transcribe this audio exactly as spoken. Return only the transcription, nothing else. No labels, no prefixes.' },
+      ],
+    }];
+    const response = await this.generateContent(contents, {
+      thinkingConfig: { thinkingLevel: 'low', includeThoughts: false },
+    });
+    return response.text?.trim() ?? '';
   }
 
   async chat(systemPrompt: string, history: ChatMessage[], userMessage: string, tools: ToolDeclaration[], executeTool: (call: ToolCall) => Promise<any>, images?: Array<{ data: string; mimeType: string }>) {
