@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, Product, Order, City, OrderIntent } from './types';
-import { Sparkles, ShoppingBag, X, Plus, Globe, LogIn, PanelLeftClose } from 'lucide-react';
+import { Zap, ShoppingBag, X, Plus, Globe, LogIn, PanelLeftClose } from 'lucide-react';
 import { KaprukaLogo } from './lib/kapruka';
 import { formatPrice, detectCurrency, type Currency } from './lib/currency';
 import ChatSection from './components/ChatSection';
@@ -664,7 +664,11 @@ export default function App() {
       city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
       order_created: state.orderCreated,
       tracking_result: state.trackingData,
-      order_intent: data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result,
+      // When order created, capture the full prefill context so the confirmation card
+      // can display recipient name, delivery date, city, and gift message.
+      order_intent: state.orderCreated
+        ? (state.currentPrefill || orderIntent || undefined)
+        : data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result,
       search_cursor: state.lastSearchCursor,
     };
     void addMessage(replyMsg);
@@ -1523,6 +1527,37 @@ export default function App() {
             )
           )}
 
+          {/* Profile completion nudge — only for signed-in users with gaps */}
+          {user && profile && missingOptionalFields(profile).length > 0 && (
+            <button
+              onClick={() => setProfilePromptOpen(true)}
+              className="sidebar-item"
+              title="Teach Wasi your taste"
+              style={{ position: 'relative' }}
+            >
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.08) 100%)',
+                  border: '1px solid rgba(201,168,76,0.3)',
+                }}
+              >
+                <Zap className="w-3.5 h-3.5" style={{ color: '#C9A84C' }} />
+              </div>
+              {sidebarExpanded && (
+                <span className="sidebar-label text-[11px] font-semibold leading-tight" style={{ color: '#C9A84C' }}>
+                  Unlock your<br />
+                  <span className="font-normal opacity-70">gift persona</span>
+                </span>
+              )}
+              {/* Subtle glow dot */}
+              <span
+                className="absolute top-0 right-0 w-2 h-2 rounded-full"
+                style={{ background: '#C9A84C', boxShadow: '0 0 6px rgba(201,168,76,0.8)', animation: 'langPulse 2s ease-in-out infinite' }}
+              />
+            </button>
+          )}
+
           {/* Cart */}
           <button
             onClick={() => setIsCartOpen(true)}
@@ -1566,18 +1601,6 @@ export default function App() {
 
       {/* ── Main — chat fills full width ────────────────────────────────────── */}
       <main className="flex-1 relative z-10 flex flex-col pb-6 pt-4">
-        {/* Save-cart banner */}
-        {showSaveBanner && !user && (
-          <div className="max-w-4xl mx-auto px-4 pt-3">
-            <SaveCartBanner
-              visible={showSaveBanner}
-              itemsAdded={cart.length}
-              lang={language}
-              onSignIn={() => setSignInOpen(true)}
-              onDismiss={() => { bannerDismissed.current = true; setShowSaveBanner(false); }}
-            />
-          </div>
-        )}
 
         <div className="flex-1 flex flex-col pt-2">
           {messages.length === 0 ? (
@@ -1654,6 +1677,28 @@ export default function App() {
         </div>
       )}
 
+
+      {/* ── Save-cart banner — floating overlay above input, non-disruptive ── */}
+      {showSaveBanner && !user && (
+        <div
+          className="fixed z-40 animate-fade-in"
+          style={{
+            bottom: 90,
+            left: sidebarWidth + 32,
+            right: 24,
+            maxWidth: 680,
+            margin: '0 auto',
+          }}
+        >
+          <SaveCartBanner
+            visible={showSaveBanner}
+            itemsAdded={cart.length}
+            lang={language}
+            onSignIn={() => setSignInOpen(true)}
+            onDismiss={() => { bannerDismissed.current = true; setShowSaveBanner(false); }}
+          />
+        </div>
+      )}
 
       {/* ── Auth + Profile modals (rendered globally) ─────────────────────── */}
       <SignInPanel

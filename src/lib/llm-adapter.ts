@@ -272,8 +272,9 @@ export interface LLMAdapter {
    * Transcribe audio to text (Gemini-native only).
    * Lightweight single-turn generateContent call — no tools, no history.
    * Returns the raw transcript string. Throws on error.
+   * @param language BCP-47 code hint ('en' | 'si' | 'ta') to guide multilingual recognition.
    */
-  transcribeAudio?(audio: { data: string; mimeType: string }): Promise<string>;
+  transcribeAudio?(audio: { data: string; mimeType: string }, language?: string): Promise<string>;
 }
 
 // ─── Kapruka MCP Tool Declarations ───────────────────────────────────────────
@@ -338,15 +339,15 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_check_delivery',
-    description: 'Check delivery availability and ESTIMATED cost. Always call kapruka_list_delivery_cities first for the exact city name. IMPORTANT: the rate returned here is an estimate — the authoritative delivery fee is in create_order.summary.delivery_fee. For Jaffna and Batticaloa (slot-prone), only call AFTER you have the delivery date.',
+    description: 'Check delivery availability and ESTIMATED fee to a Sri Lankan city on a specific date. Always call kapruka_list_delivery_cities first to get the canonical city name. The rate returned is an ESTIMATE — the authoritative fee is in kapruka_create_order.summary.delivery_fee. For Jaffna and Batticaloa (frequently full), only call after you have both city and delivery date confirmed. Pass product_id for cakes, flowers, or combos to trigger a freshness warning if delivery is > 1 day out.',
     parameters: {
       type: 'object',
       properties: {
-        city: { type: 'string', description: 'Exact city name from kapruka_list_delivery_cities (e.g. "Colombo 01", "Kandy", "Jaffna")' },
-        product_id: { type: 'string', description: 'Product id from search results' },
-        delivery_date: { type: 'string', description: 'Delivery date YYYY-MM-DD (must be tomorrow or later — past dates return an error)' }
+        city: { type: 'string', description: 'Exact canonical city name from kapruka_list_delivery_cities (e.g. "Colombo 01", "Kandy", "Jaffna"). Do NOT use aliases.' },
+        delivery_date: { type: 'string', description: 'Delivery date in YYYY-MM-DD format. Must be today or a future date — past dates return an error.' },
+        product_id: { type: 'string', description: 'Optional: product id from search results. Pass only for cakes, flowers, or perishable combos to get a freshness warning.' }
       },
-      required: ['city', 'product_id', 'delivery_date']
+      required: ['city', 'delivery_date']
     }
   },
   {
@@ -406,11 +407,11 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_track_order',
-    description: 'Track an existing Kapruka order by its KAP number (found in post-payment email). Note: ORD- references are pre-payment only.',
+    description: 'Track an existing Kapruka order. The order number is sent to the customer by email after payment is completed — it is an alphanumeric code like "VIMP34456CB2" (4-40 chars, letters + digits). This is different from the ORD-YYYYMMDD-XXXX pre-payment reference Wasi generates — T7 only works with the post-payment Kapruka number.',
     parameters: {
       type: 'object',
       properties: {
-        order_number: { type: 'string', description: 'Order number starting with KAP- (e.g. KAP-123456)' }
+        order_number: { type: 'string', description: 'Post-payment Kapruka order number from the customer\'s confirmation email (e.g. "VIMP34456CB2"). NOT the ORD- pre-payment reference.' }
       },
       required: ['order_number']
     }
@@ -623,13 +624,21 @@ class GeminiAdapter implements LLMAdapter {
    * Transcribe audio to text using Gemini native inline audio.
    * Context7 docs: ai.models.generateContent with inlineData parts.
    * Fast single-turn call — no tools, no thinking, no history.
+   * Supports multilingual: English, Sinhala (සිංහල), Tamil (தமிழ்).
    */
-  async transcribeAudio(audio: { data: string; mimeType: string }): Promise<string> {
+  async transcribeAudio(audio: { data: string; mimeType: string }, language?: string): Promise<string> {
+    // Always accept all three languages + code-switching, use language as primary hint.
+    // Users freely mix English, Sinhala (සිංහල), and Tamil (தமிழ்) mid-sentence.
+    const primaryLang = language === 'si' ? 'Sinhala (සිංහල)'
+      : language === 'ta' ? 'Tamil (தமிழ்)'
+      : 'English';
+    const sttPrompt = `Transcribe this audio exactly as spoken. The speaker is Sri Lankan and may speak in ${primaryLang}, English, Sinhala (සිංහල), Tamil (தமிழ்), or freely mix languages mid-sentence (code-switching). Preserve each word in its original language and script: Sinhala words in Sinhala script, Tamil words in Tamil script, English words in English. Do NOT translate. Return only the raw transcription text — no labels, no prefixes, no explanations.`;
+
     const contents = [{
       role: 'user',
       parts: [
         { inlineData: { mimeType: audio.mimeType, data: audio.data } },
-        { text: 'Transcribe this audio exactly as spoken. Return only the transcription, nothing else. No labels, no prefixes.' },
+        { text: sttPrompt },
       ],
     }];
     const response = await this.generateContent(contents, {
@@ -657,6 +666,9 @@ class GeminiAdapter implements LLMAdapter {
     const config: any = {
       systemInstruction: systemPrompt,
       tools: [{ functionDeclarations: tools.map(t => this.toGeminiDecl(t)) }],
+      // AUTO lets the model decide when to call tools vs. reply in text —
+      // most reliable mode for open-ended agentic turns.
+      toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
       thinkingConfig: { thinkingLevel: 'low', includeThoughts: false },
     };
 
@@ -666,14 +678,10 @@ class GeminiAdapter implements LLMAdapter {
     while (response.functionCalls?.length > 0 && safetyLoops < 8) {
       safetyLoops++;
 
+      // Push the FULL model content — Gemini requires all parts including
+      // thoughtSignature back in history, or the next call returns 400.
       if (response.candidates?.[0]?.content) {
-        const modelContent = response.candidates[0].content;
-        const fcParts = (modelContent.parts || []).filter((p: any) => p.functionCall);
-        // Do NOT add non-FC parts (progress text) to the conversation when
-        // function calls are present — the OpenAI adapter ignores msg.content
-        // when tool_calls exist, and the Gemini adapter must do the same.
-        // Adding progress text here causes duplicate messages on the client.
-        contents.push({ role: 'model', parts: fcParts });
+        contents.push(response.candidates[0].content);
       }
 
       const calls = response.functionCalls;
@@ -685,7 +693,7 @@ class GeminiAdapter implements LLMAdapter {
 
       const results = await Promise.all(
         [...deduped.values()].map(async (call: any) => {
-          const toolCall: ToolCall = { id: call.id || `${call.name}-${Date.now()}`, name: call.name, args: call.args };
+          const toolCall: ToolCall = { id: call.id ?? call.name, name: call.name, args: call.args };
           let result: any;
           try { result = await executeTool(toolCall); } catch (e: any) { result = { error: e.message }; }
           toolCallsLog.push({ toolName: call.name, args: call.args, result });
@@ -693,9 +701,9 @@ class GeminiAdapter implements LLMAdapter {
         })
       );
 
-      // Build a key→result map so every original call ID gets a functionResponse.
-      // Gemini requires a response for EVERY functionCall ID it emitted —
-      // even deduped ones. Missing responses cause hallucinations or errors.
+      // Gemini requires a functionResponse part for EVERY functionCall it emitted.
+      // id must match the call's id exactly (or be omitted if call has no id).
+      // response must be Record<string,unknown> — wrap arrays/primitives in {output:...}.
       const resultByKey = new Map<string, any>();
       for (const { call, result } of results) {
         resultByKey.set(`${call.name}:${JSON.stringify(call.args)}`, result);
@@ -703,8 +711,16 @@ class GeminiAdapter implements LLMAdapter {
       const responseParts: any[] = [];
       for (const call of calls) {
         const key = `${call.name}:${JSON.stringify(call.args)}`;
-        const result = resultByKey.get(key)!;
-        responseParts.push({ functionResponse: { id: call.id || `${call.name}-${Date.now()}`, name: call.name, response: result } });
+        const rawResult = resultByKey.get(key)!;
+        // Ensure response is Record<string,unknown> — Gemini rejects arrays/primitives
+        const safeResponse: Record<string, unknown> =
+          rawResult && typeof rawResult === 'object' && !Array.isArray(rawResult)
+            ? rawResult
+            : { output: rawResult };
+        const frPart: any = { functionResponse: { name: call.name, response: safeResponse } };
+        // Only include id if the model provided one — don't generate fake IDs
+        if (call.id) frPart.functionResponse.id = call.id;
+        responseParts.push(frPart);
       }
 
       contents.push({ role: 'user', parts: responseParts });

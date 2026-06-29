@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CartItem, City, DeliveryCheckResult, Order, OrderIntent } from '../types';
-import { ShoppingBag, MapPin, Calendar, User, Phone, FileText, CheckCircle2, Ticket, AlertCircle, RefreshCw, Sparkles, Trash2, Smartphone, Gift, Clock, Share2, Home, Building2, Briefcase, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { ShoppingBag, MapPin, Calendar, User, Phone, FileText, CheckCircle2, Ticket, AlertCircle, RefreshCw, Sparkles, Trash2, Smartphone, Gift, Home, Building2, Briefcase, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { KaprukaLogo } from '../lib/kapruka';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
+import OrderConfirmationCard from './OrderConfirmationCard';
 
 const ROLE_WORDS = new Set(['amma','akka','nangi','malli','aiya','wife','husband','machan','daughter','son','friend','girlfriend','boyfriend','sister','brother','mother','father','mom','dad','grandma','grandpa']);
 
@@ -82,9 +83,6 @@ export default function CartDrawer({
   const [isCheckingDelivery, setIsCheckingDelivery] = useState(false);
   const [deliveryResult, setDeliveryResult] = useState<DeliveryCheckResult | null>(null);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
-
-  // Expiry states
-  const [timeLeft, setTimeLeft] = useState<number>(3600); // 60 mins in secs
 
   // Detect product type by name + category (live MCP uses IDs like cake00ka002034,
   // not the CAKE_ prefix that the simulator uses — so prefix matching breaks on live data).
@@ -237,25 +235,6 @@ export default function CartDrawer({
     checkDelivery();
   }, [selectedCity, deliveryDate, cart, isPerishable]);
 
-  // Handle pay link timer countdown
-  useEffect(() => {
-    if (!orderResult) return;
-    const expiresMs = new Date(orderResult.expires_at).getTime();
-    if (isNaN(expiresMs)) { setTimeLeft(0); return; }
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const diffSecs = Math.floor((expiresMs - now) / 1000);
-      if (diffSecs <= 0) {
-        setTimeLeft(0);
-        clearInterval(interval);
-      } else {
-        setTimeLeft(diffSecs);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [orderResult]);
-
   const handleCityPick = (city: City) => {
     setSelectedCity(city);
     setCityQuery(city.name);
@@ -311,15 +290,6 @@ export default function CartDrawer({
   const [showShareCard, setShowShareCard] = useState(false);
   const triggerShare = () => {
     setShowShareCard(true);
-  };
-
-  const [copySuccess, setCopySuccess] = useState(false);
-  const handleCopyLink = (url: string) => {
-    navigator.clipboard.writeText(url);
-    setCopySuccess(true);
-    setTimeout(() => {
-      setCopySuccess(false);
-    }, 2000);
   };
 
   return (
@@ -783,113 +753,21 @@ export default function CartDrawer({
 
       {/* Pay URL reveal drawer with 60-min countdown timer + auto-renew button (Tier 1 core!) */}
       {orderResult && (
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-slate-900 text-white rounded-3xl p-5 space-y-4 shadow-xl shadow-slate-900/40 border border-slate-700/50 animate-fade-in relative overflow-hidden select-none">
-          
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-mono bg-emerald-950 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-wider">
-                PAYMENT LOCK ACTIVE
-              </span>
-            </div>
-
-            {/* Countdown Tick */}
-            <div className="text-right flex items-center gap-1.5 text-xs text-amber-400 font-mono bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-500/20">
-              <Clock className="w-3.5 h-3.5" />
-              <span>
-                {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:
-                {(timeLeft % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <span className="text-[10px] font-mono text-slate-400">Transaction total:</span>
-            <p className="text-2xl font-mono font-bold text-white tracking-tight">
-              {formatPrice(orderResult.total_lkr || orderResult.summary?.grand_total, (orderResult.summary?.currency || currency) as Currency)}
-            </p>
-            {/* Breakdown: items + delivery — always shown after lock */}
-            <div className="bg-slate-800/50 rounded-xl p-3 space-y-1.5 border border-slate-700/40">
-              {cart.map((item, i) => (
-                <div key={`locked-${item.product_code}-${i}`} className="flex justify-between items-center text-[10px] font-mono text-slate-300">
-                  <span className="truncate max-w-[60%]">{item.name}</span>
-                  <span>{formatPrice(item.price_lkr * item.quantity, (item.currency || currency) as Currency)}</span>
-                </div>
-              ))}
-              {(() => {
-                const itemsTotal = cart.reduce((s, i) => s + i.price_lkr * i.quantity, 0);
-                const deliveryFee = (orderResult.total_lkr || orderResult.summary?.grand_total || 0) - itemsTotal;
-                return deliveryFee > 0 ? (
-                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 border-t border-slate-700/40 pt-1.5">
-                    <span>Delivery fee</span>
-                    <span>{formatPrice(deliveryFee, (orderResult.summary?.currency || currency) as Currency)}</span>
-                  </div>
-                ) : null;
-              })()}
-            </div>
-          </div>
-
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.open(orderResult.pay_url, '_blank', 'noopener,noreferrer')}
-                  className="block text-center py-2.5 px-3 bg-[#402970] hover:bg-[#2D1B69] text-white font-display font-semibold text-xs rounded-lg transition duration-150 shadow-sm border border-[#402970]/10 transform active:scale-98 cursor-pointer"
-                >
-                  Open Kapruka Checkout →
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => handleCopyLink(orderResult.pay_url)}
-                  className={`py-2.5 px-3 text-xs font-semibold rounded-lg font-display border transition-all duration-150 cursor-pointer text-center ${
-                    copySuccess
-                      ? 'bg-green-50 text-[#402970] border-green-200'
-                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
-                  }`}
-                >
-                  {copySuccess ? '✓ Copied!' : 'Copy Pay Link'}
-                </button>
-              </div>
-            </div>
-
-
-            {/* Auto price renewal check (F-20) */}
-            {timeLeft <= 300 ? ( // Display renewal warning at remaining < 5 minutes
-              <div className="bg-amber-950/30 border border-amber-500/20 text-xs p-2.5 rounded-xl text-amber-300 space-y-2">
-                <p className="flex items-center gap-1 leading-normal font-medium">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> Price lock expires in less than 5 min!
-                </p>
-                <button
-                  onClick={onRenewOrder}
-                  className="w-full py-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-[10px] transition font-mono uppercase cursor-pointer"
-                >
-                  Renew price lock (60 mins)
-                </button>
-              </div>
-            ) : (
-              <div className="flex justify-between items-center text-[10px] text-slate-400 bg-slate-800/40 p-2.5 rounded-xl border border-white/5 uppercase tracking-wider font-mono">
-                <span>Auto-renewal active at T-5min</span>
-                <span className="text-emerald-400">Active</span>
-              </div>
-            )}
-          </div>
-
-          <div className="pt-3 border-t border-slate-700/50 flex justify-between items-center">
-            <div className="space-y-0.5">
-              <span className="text-[9px] font-mono text-slate-400">checkout reference ID</span>
-              <p className="text-xs text-white font-mono font-bold tracking-widest">{orderResult.order_ref}</p>
-            </div>
-            
-            <button
-              onClick={triggerShare}
-              className="text-[#402970] bg-white hover:bg-gray-50 flex items-center gap-1 py-1.5 px-2.5 rounded-lg text-[10px] font-bold font-mono uppercase cursor-pointer transition active:scale-95"
-            >
-              <Share2 className="w-3.5 h-3.5" /> Share Gift Card
-            </button>
-          </div>
-        </div>
+        <OrderConfirmationCard
+          order={orderResult}
+          cart={cart}
+          currency={currency}
+          onRenew={onRenewOrder}
+          onShare={triggerShare}
+          deliveryMeta={orderIntent ? {
+            recipientName: orderIntent.recipient_name,
+            deliveryDate:  orderIntent.delivery_date,
+            city:          orderIntent.city_name,
+            giftMessage:   orderIntent.gift_message,
+            occasion:      orderIntent.occasion,
+            senderName:    orderIntent.sender_name,
+          } : undefined}
+        />
       )}
 
       {/* SHAREABLE GIFT CARD PNG EXPORT CANVAS (F-17 feature!) */}

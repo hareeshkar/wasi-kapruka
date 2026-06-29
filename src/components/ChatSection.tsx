@@ -8,6 +8,7 @@ import { Message, Product, City, Order } from '../types';
 import { Send, ImagePlus, Play, Pause } from 'lucide-react';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
 import ProductCard from './ProductCard';
+import OrderConfirmationCard from './OrderConfirmationCard';
 import ProductComparisonCard from './ProductComparisonCard';
 import CategoryExplorer from './CategoryExplorer';
 import WasiRobotAvatar from './WasiRobotAvatar';
@@ -315,7 +316,7 @@ export default function ChatSection({
           audio_data: base64, audio_mime_type: blobMime, transcription: undefined,
         };
         if (onAddMessage) onAddMessage(voiceMsg);
-        fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio_base64: base64, mime_type: blobMime }) })
+        fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio_base64: base64, mime_type: blobMime, language: lang }) })
           .then(r => r.json())
           .then(data => { if (data.text?.trim() && onUpdateMessage) onUpdateMessage(voiceMsg.id, { transcription: data.text.trim() }); })
           .catch(() => {});
@@ -581,15 +582,28 @@ export default function ChatSection({
 
                       {/* Order confirmation */}
                       {msg.order_created && (
-                        <div className="mt-2 rounded-xl p-4" style={{ background: 'linear-gradient(135deg, #402970 0%, #2D1B69 100%)' }}>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Order Confirmed</p>
-                          <p className="text-[14px] font-bold text-white">#{msg.order_created.order_id || msg.order_created.order_ref}</p>
-                          {msg.order_created.total_lkr && (
-                            <p className="text-[18px] font-bold text-gold-bright mt-1">
-                              {formatPrice(msg.order_created.total_lkr, detectCurrency(msg.order_created.summary) as Currency)}
-                            </p>
-                          )}
-                          <p className="text-[11px] text-white/60 mt-2">Kapruka will contact you for delivery details.</p>
+                        <div className="mt-2">
+                          <OrderConfirmationCard
+                            order={msg.order_created}
+                            cart={msg.products?.map(p => ({
+                              product_code: p.product_code,
+                              name: p.name,
+                              price_lkr: p.price_lkr,
+                              currency: p.currency,
+                              image_url: p.image_url,
+                              quantity: 1,
+                              category: p.category,
+                            })) ?? []}
+                            deliveryMeta={msg.order_intent ? {
+                              recipientName: msg.order_intent.recipient_name,
+                              deliveryDate:  msg.order_intent.delivery_date,
+                              city:          msg.order_intent.city_name,
+                              giftMessage:   msg.order_intent.gift_message,
+                              occasion:      msg.order_intent.occasion,
+                              senderName:    msg.order_intent.sender_name,
+                            } : undefined}
+                            lang={lang}
+                          />
                         </div>
                       )}
 
@@ -650,14 +664,53 @@ export default function ChatSection({
 
           {/* Mic status */}
           {micState !== 'idle' && (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono font-medium mb-2 ${
-              micState === 'recording' ? 'bg-rose-50 text-rose-600 border border-rose-200' :
-              micState === 'transcribing' ? 'bg-violet-tint text-violet border border-violet/15' :
-              'bg-red-50 text-red-600 border border-red-200'
-            }`}>
-              {micState === 'recording' && <><span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0" /><span>Recording\u2026 {recSeconds}s</span><span className="ml-auto text-rose-400">{MAX_REC_SECONDS - recSeconds}s left</span></>}
-              {micState === 'transcribing' && <><span className="w-2 h-2 rounded-full bg-violet animate-pulse" />Transcribing\u2026</>}
-              {micState === 'error' && <><span>⚠</span>Transcription failed — try again</>}
+            <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-medium mb-2 transition-all ${
+              micState === 'error' ? 'bg-red-50 border border-red-200' : ''
+            }`} style={
+              micState === 'recording'
+                ? { background: 'linear-gradient(135deg, rgba(255,241,242,0.95) 0%, rgba(255,228,230,0.8) 100%)', border: '1px solid rgba(251,113,133,0.4)' }
+                : micState === 'transcribing'
+                ? { background: 'rgba(91,62,138,0.07)', border: '1px solid rgba(91,62,138,0.15)' }
+                : {}
+            }>
+              {micState === 'recording' && (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0 animate-pulse" />
+                  <div className="flex items-center gap-[2.5px] h-[18px] flex-shrink-0">
+                    {[3,7,12,16,12,9,5,10,15,11,6,13,9,4,7].map((h, i) => (
+                      <span key={i} className="w-[2px] rounded-full bg-rose-400"
+                        style={{ height: `${h}px`, animation: `waveBar 0.7s ease-in-out ${i * 0.05}s infinite alternate` }} />
+                    ))}
+                  </div>
+                  <span className="text-rose-700 font-mono font-bold tabular-nums text-[13px]">
+                    {String(Math.floor(recSeconds / 60)).padStart(2, '0')}:{String(recSeconds % 60).padStart(2, '0')}
+                  </span>
+                  <span className="ml-auto text-rose-400 text-[10px] font-mono">{MAX_REC_SECONDS - recSeconds}s</span>
+                  <button onClick={cancelRecording} title="Cancel"
+                    className="ml-1 w-5 h-5 rounded-full bg-rose-100 hover:bg-rose-200 flex items-center justify-center text-rose-500 hover:text-rose-600 transition-colors cursor-pointer flex-shrink-0">
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </>
+              )}
+              {micState === 'transcribing' && (
+                <>
+                  <div className="flex items-center gap-[3px] h-[16px] flex-shrink-0">
+                    {[0, 1, 2, 3, 4].map(i => (
+                      <span key={i} className="w-[2px] rounded-full bg-violet"
+                        style={{ height: i === 2 ? '14px' : i === 1 || i === 3 ? '10px' : '6px', animation: `waveBar 0.8s ease-in-out ${i * 0.1}s infinite` }} />
+                    ))}
+                  </div>
+                  <span className="text-violet font-medium">{'Transcribing…'}</span>
+                </>
+              )}
+              {micState === 'error' && (
+                <>
+                  <span className="text-red-500">⚠</span>
+                  <span className="text-red-600">Transcription failed — try again</span>
+                </>
+              )}
             </div>
           )}
 
