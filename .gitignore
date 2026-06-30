@@ -45,6 +45,9 @@ spock-test.js
 *.jpg
 *.jpeg
 *.webp
+
+# Exception: Kapruka logo must be tracked for production builds
+!public/static/image/send-online-logo.png
 screenshot-sanity.jpg
 
 # MCP probe outputs & temp scripts
