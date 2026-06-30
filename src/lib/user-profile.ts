@@ -55,15 +55,14 @@ export function missingEssentialFields(p: UserProfile | null): string[] {
   return missing;
 }
 
-export type OptionalProfileField = 'date_of_birth' | 'city' | 'typical_recipient' | 'gender';
+export type OptionalProfileField = 'city' | 'typical_recipient' | 'gender';
 
 export function missingOptionalFields(p: UserProfile | null): OptionalProfileField[] {
-  if (!p) return ['gender', 'typical_recipient', 'city', 'date_of_birth'];
+  if (!p) return ['gender', 'typical_recipient', 'city'];
   const missing: OptionalProfileField[] = [];
   if (!p.gender)            missing.push('gender');
   if (!p.typical_recipient) missing.push('typical_recipient');
   if (!p.city)              missing.push('city');
-  if (!p.date_of_birth)     missing.push('date_of_birth');
   return missing;
 }
 

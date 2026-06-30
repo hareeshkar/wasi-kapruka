@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, CheckCircle2, ArrowRight, Sparkles, Gift } from 'lucide-react';
+import { Loader2, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import WasiRobotAvatar from './WasiRobotAvatar';
 import type { UserProfile, OptionalProfileField } from '../lib/user-profile';
@@ -34,7 +34,6 @@ const STEP_TITLES: Record<string, { en: string; emoji: string }> = {
   gender:            { en: 'First up — your gender?',          emoji: '🌿' },
   typical_recipient: { en: 'Who do you usually gift to?',      emoji: '🎁' },
   city:              { en: 'And your city?',                   emoji: '📍' },
-  date_of_birth:     { en: 'When\'s your birthday?',           emoji: '🎂' },
 };
 
 export default function ProgressiveProfilePrompt({
@@ -52,7 +51,7 @@ export default function ProgressiveProfilePrompt({
   if (fields.length === 0) return null;
 
   // Build ordered steps from ONLY the missing fields
-  const orderedFields = ['gender', 'typical_recipient', 'city', 'date_of_birth']
+  const orderedFields = ['gender', 'typical_recipient', 'city']
     .filter(f => fields.includes(f as OptionalProfileField)) as OptionalProfileField[];
   const totalSteps = orderedFields.length;
   const currentField = orderedFields[step];
@@ -255,27 +254,6 @@ export default function ProgressiveProfilePrompt({
             </div>
           )}
 
-          {/* ── STEP: DOB (optional) ── */}
-          {currentField === 'date_of_birth' && (
-            <div className="space-y-4">
-              <p className="text-lg font-semibold text-ink leading-snug">
-                When's your birthday?{' '}
-                <span className="text-gray-400 font-normal text-base">(optional)</span>
-              </p>
-              <p className="text-sm text-gray-400 -mt-2">
-                Wasi will remind you a week before — great for yourself or gifting season! 🎂
-              </p>
-              <input
-                ref={firstFieldRef as React.RefObject<HTMLInputElement>}
-                type="date"
-                value={patch.date_of_birth ?? ''}
-                max={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setPatch(p => ({ ...p, date_of_birth: e.target.value }))}
-                aria-label="Your birthday"
-                className="w-full px-4 py-3 min-h-[48px] bg-gray-50 border border-black/10 focus:border-[#402970]/40 focus:bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#402970]/10 transition"
-              />
-            </div>
-          )}
         </div>
 
         {/* Footer buttons */}
@@ -341,44 +319,6 @@ export default function ProgressiveProfilePrompt({
                   className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition"
                 >
                   Skip city for now
-                </button>
-              </div>
-            </div>
-          )}
-
-          {currentField === 'date_of_birth' && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const toSave: Partial<UserProfile> = {};
-                  if (patch.date_of_birth) toSave.date_of_birth = patch.date_of_birth;
-                  advance(toSave);
-                }}
-                disabled={saving}
-                className="w-full text-white text-sm font-semibold px-4 py-3 min-h-[48px] rounded-xl cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition shadow-sm"
-                style={{
-                  background: 'linear-gradient(135deg, #402970 0%, #5B3E8A 100%)',
-                  boxShadow: '0 4px 14px rgba(64,41,112,0.3)',
-                }}
-              >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <Gift className="w-4 h-4" />
-                    <span>OK, done</span>
-                    <CheckCircle2 className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={skipAll}
-                  className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition"
-                >
-                  Skip birthday
                 </button>
               </div>
             </div>
