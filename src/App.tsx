@@ -175,10 +175,9 @@ export default function App() {
     migrateGuestDataToUser(user.id).catch(err => console.error('[auth migration]', err));
   }, [user?.id]);
 
-  // NOTE: ProgressiveProfilePrompt is NO LONGER auto-triggered.
-  // Respecting user intent: the user already provided DOB + language at signup.
-  // Re-asking for the same info via a pop-up is intrusive. The prompt is now
-  // opened explicitly via "Complete my profile" in the UserMenu (UserMenu.tsx).
+  // NOTE: ProgressiveProfilePrompt is not auto-triggered.
+  // The user already provided core info at sign-up (name, DOB, language).
+  // The prompt is opened explicitly via the sidebar avatar or "Set up your profile" nudge.
 
   // When the user signs in for the first time (or page loads), auto-pick the
   // most recent conversation so they see their chat history.

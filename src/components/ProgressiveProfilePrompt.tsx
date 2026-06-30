@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import WasiRobotAvatar from './WasiRobotAvatar';
 import type { UserProfile, OptionalProfileField } from '../lib/user-profile';
@@ -19,13 +19,13 @@ const GENDER_OPTS: { code: NonNullable<UserProfile['gender']>; label: { en: stri
   { code: 'prefer_not_to_say', label: { en: 'Prefer not to say', si: 'කිවමනා නැත', ta: 'சொல்ல விரும்பவில்லை' }, emoji: '🙈' },
 ];
 
-const RECIPIENT_CHIPS: { code: UserProfile['typical_recipient']; label: string; emoji: string }[] = [
-  { code: 'partner',   label: 'My partner',          emoji: '💑' },
-  { code: 'parent',    label: 'My amma / thaththa',  emoji: '🙏' },
-  { code: 'child',     label: 'My kids',              emoji: '🧸' },
-  { code: 'friend',    label: 'A friend / machan',   emoji: '👋' },
-  { code: 'self',      label: 'Myself',               emoji: '😄' },
-  { code: 'colleague', label: 'Colleague / boss',     emoji: '💼' },
+const RECIPIENT_CHIPS: { code: UserProfile['typical_recipient']; label: { en: string; si: string; ta: string }; emoji: string }[] = [
+  { code: 'partner',   label: { en: 'My partner',          si: 'මගේ සහකරු',          ta: 'என் காதலர்' },   emoji: '💑' },
+  { code: 'parent',    label: { en: 'My amma / thaththa',  si: 'මගේ අම්මා / තාත්තා', ta: 'என் அம்மா / அப்பா' }, emoji: '🙏' },
+  { code: 'child',     label: { en: 'My kids',             si: 'මගේ ළමයි',           ta: 'என் குழந்தைகள்' }, emoji: '🧸' },
+  { code: 'friend',    label: { en: 'A friend / machan',   si: 'යාලුවෙක්',           ta: 'ஒரு நண்பர்' },    emoji: '👋' },
+  { code: 'self',      label: { en: 'Myself',              si: 'මම',                  ta: 'நானே' },          emoji: '😄' },
+  { code: 'colleague', label: { en: 'Colleague / boss',    si: 'සගයෙක් / ලොක්කා',   ta: 'சக ஊழியர் / முதலாளி' }, emoji: '💼' },
 ];
 
 const SL_CITIES = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Jaffna', 'Matara', 'Kurunegala'];
@@ -42,10 +42,8 @@ export default function ProgressiveProfilePrompt({
   const { save } = useUserProfile(userId);
   const [step, setStep]       = useState(0);
   const [saving, setSaving]   = useState(false);
-  const [patch, setPatch]     = useState<Partial<UserProfile>>({});
   const [cityInput, setCityInput] = useState('');
-  const [sliding, setSliding] = useState(false);
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const firstFieldRef = useRef<HTMLButtonElement>(null);
 
   if (fields.length === 0) return null;
@@ -59,11 +57,12 @@ export default function ProgressiveProfilePrompt({
 
   const advance = useCallback(async (moreFields?: Partial<UserProfile>) => {
     setSaving(true);
+    setSaveError(null);
     let saved = true;
     const fieldsToSave = moreFields ?? {};
     if (Object.keys(fieldsToSave).length > 0) {
       const result = await save(fieldsToSave as Partial<UserProfile>);
-      if (!result.ok) saved = false;
+      if (!result.ok) { saved = false; setSaveError(result.error || 'Failed to save'); }
     }
     setSaving(false);
 
@@ -109,7 +108,6 @@ export default function ProgressiveProfilePrompt({
 
   return (
     <div
-      ref={overlayRef}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
       onClick={skipAll}
       role="dialog"
@@ -152,13 +150,7 @@ export default function ProgressiveProfilePrompt({
         </div>
 
         {/* Step content */}
-        <div
-          className="px-5 pt-5 transition-all duration-200"
-          style={{
-            opacity: sliding ? 0 : 1,
-            transform: sliding ? 'translateX(-14px)' : 'translateX(0)',
-          }}
-        >
+        <div className="px-5 pt-5">
           {/* ── STEP: Gender ── */}
           {currentField === 'gender' && (
             <div className="space-y-4">
@@ -174,15 +166,9 @@ export default function ProgressiveProfilePrompt({
                     key={code}
                     ref={i === 0 ? firstFieldRef : undefined}
                     type="button"
-                    role="radio"
-                    aria-checked={patch.gender === code}
                     disabled={saving}
                     onClick={() => advance({ gender: code })}
-                    className={`flex items-center gap-2.5 px-3 py-3 min-h-[48px] rounded-xl text-sm font-medium border cursor-pointer transition-all active:scale-95 disabled:opacity-50 ${
-                      patch.gender === code
-                        ? 'bg-[#402970] text-white border-[#402970] shadow-md shadow-[#402970]/20'
-                        : 'border-black/10 bg-white text-gray-700 hover:bg-[#EDE5F8] hover:border-[#402970]/30'
-                    }`}
+                    className="flex items-center gap-2.5 px-3 py-3 min-h-[48px] rounded-xl text-sm font-medium border border-black/10 bg-white text-gray-700 hover:bg-[#EDE5F8] hover:border-[#402970]/30 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <span className="text-base leading-none">{emoji}</span>
                     <span>{label[lang] ?? label.en}</span>
@@ -204,14 +190,12 @@ export default function ProgressiveProfilePrompt({
                     key={code}
                     ref={i === 0 ? firstFieldRef : undefined}
                     type="button"
-                    role="radio"
-                    aria-checked={patch.typical_recipient === code}
                     disabled={saving}
                     onClick={() => advance({ typical_recipient: code })}
-                    className="flex items-center gap-2.5 px-3 py-3 min-h-[48px] rounded-xl text-sm font-medium border border-black/10 bg-white text-gray-700 hover:bg-[#EDE5F8] hover:border-[#402970]/30 active:scale-95 transition-all cursor-pointer text-left disabled:opacity-50"
+                    className="flex items-center gap-2.5 px-3 py-3 min-h-[48px] rounded-xl text-sm font-medium border border-black/10 bg-white text-gray-700 hover:bg-[#EDE5F8] hover:border-[#402970]/30 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <span className="text-base leading-none">{emoji}</span>
-                    <span>{label}</span>
+                    <span>{label[lang] ?? label.en}</span>
                   </button>
                 ))}
               </div>
@@ -258,14 +242,20 @@ export default function ProgressiveProfilePrompt({
 
         {/* Footer buttons */}
         <div className="px-5 pt-4 pb-6">
+          {saveError && (
+            <p className="text-[11px] text-rose-600 text-center mb-3 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+              {saveError}
+            </p>
+          )}
+
           {currentField === 'gender' && (
             <div className="flex justify-center pt-1">
               <button
                 type="button"
-                onClick={skipAll}
+                onClick={() => advance()}
                 className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition"
               >
-                Skip setup
+                Skip
               </button>
             </div>
           )}
@@ -277,7 +267,7 @@ export default function ProgressiveProfilePrompt({
                 onClick={() => advance()}
                 className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition"
               >
-                Skip this
+                Skip
               </button>
             </div>
           )}
@@ -299,16 +289,11 @@ export default function ProgressiveProfilePrompt({
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
-                ) : isLast ? (
+                ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
                     <span>You're all set</span>
                     <CheckCircle2 className="w-4 h-4" />
-                  </>
-                ) : (
-                  <>
-                    <span>Next</span>
-                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -318,7 +303,7 @@ export default function ProgressiveProfilePrompt({
                   onClick={finishNow}
                   className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition"
                 >
-                  Skip city for now
+                  Skip
                 </button>
               </div>
             </div>
