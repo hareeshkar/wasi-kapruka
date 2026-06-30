@@ -37,7 +37,7 @@ export default function App() {
   // Auth + profile
   const { user, loading: authLoading, signOut } = useAuth();
   const ownerId = user?.id ?? null;
-  const { profile, save: saveProfile } = useUserProfile(ownerId);
+  const { profile, save: saveProfile, refresh: refreshProfile } = useUserProfile(ownerId);
   const [signInOpen, setSignInOpen] = useState(false);
   const [profilePromptOpen, setProfilePromptOpen] = useState(false);
   const [showSaveBanner, setShowSaveBanner] = useState(false);
@@ -1421,7 +1421,18 @@ export default function App() {
     runNextDemoStep();
   }; */ // END DEMO TOUR — DISABLED
 
-  const sidebarWidth = sidebarExpanded ? 200 : 80;
+  const sidebarWidth = sidebarExpanded ? 220 : 80;
+
+  // Force-collapse sidebar on mobile
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent | MediaQueryList) => {
+      if (e.matches) setSidebarExpanded(false);
+    };
+    handler(mq);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   return (
     <div className="min-h-screen font-sans text-ink relative" style={{ background: '#FAFAF8' }}>
@@ -1532,7 +1543,7 @@ export default function App() {
             <button
               onClick={() => setProfilePromptOpen(true)}
               className="sidebar-item"
-              title="Teach Wasi your taste"
+              title="Set up your profile"
               style={{ position: 'relative' }}
             >
               <div
@@ -1546,8 +1557,8 @@ export default function App() {
               </div>
               {sidebarExpanded && (
                 <span className="sidebar-label text-[11px] font-semibold leading-tight" style={{ color: '#C9A84C' }}>
-                  Unlock your<br />
-                  <span className="font-normal opacity-70">gift persona</span>
+                  Set up your<br />
+                  <span className="font-normal opacity-70">profile</span>
                 </span>
               )}
               {/* Subtle glow dot */}
@@ -1714,6 +1725,7 @@ export default function App() {
           onClose={() => setProfilePromptOpen(false)}
           onComplete={async () => {
             await saveProfile({ profile_complete: true });
+            await refreshProfile();
           }}
           lang={language}
         />

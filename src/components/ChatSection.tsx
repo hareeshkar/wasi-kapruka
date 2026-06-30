@@ -257,7 +257,7 @@ export default function ChatSection({
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e as unknown as React.FormEvent);
     }

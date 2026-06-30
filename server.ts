@@ -1766,6 +1766,7 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
         '- FIRST reply: greet by first name. NEVER open with a generic greeting.',
         '- NEVER re-ask for info already in the profile (name, city, age, typical_recipient).',
         '- Match the Tone field: casual for Gen Z, warm-professional for Millennials, respectful-clear for Boomers.',
+        '- If Age is "unknown", INFER from writing style, emoji usage, voice tone, and image context across turns. Adapt tone silently.',
         '- If typical_recipient is "self", recommend self-buy items (groceries, electronics), not just gifts.',
       ].join('\n') : '',
     ].filter(Boolean).join('\n');
@@ -1782,9 +1783,11 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
         '- FIRST reply: greet by first name. NEVER open with a generic greeting.',
         '- DO NOT re-ask for any field already in the profile.',
         '- Match the Tone field in the profile.',
+        '- If Age is "unknown", INFER from signals: writing style (Singlish/Tanglish = young, formal = older), vocabulary, emoji density, voice tone (if voice input), image context (if images shared). Adapt tone dynamically across turns — never announce you are inferring.',
       ] : [
         'PERSONALIZATION (GUEST — learn from conversation):',
         '- Detect register from their writing: Singlish/Tanglish → warm casual, formal English → professional.',
+        '- INFER age group from signals: emoji density, slang, vocabulary complexity, voice tone, image context. Adapt tone silently.',
         '- Remember names, cities, occasions, relationships they mention. Never re-ask.',
         '- Match their emoji energy. Adapt tone to their mood (stressed → fast decisive, casual → relaxed).',
       ]),

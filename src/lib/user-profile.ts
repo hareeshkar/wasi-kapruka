@@ -58,12 +58,12 @@ export function missingEssentialFields(p: UserProfile | null): string[] {
 export type OptionalProfileField = 'date_of_birth' | 'city' | 'typical_recipient' | 'gender';
 
 export function missingOptionalFields(p: UserProfile | null): OptionalProfileField[] {
-  if (!p) return ['date_of_birth', 'city', 'typical_recipient'];
+  if (!p) return ['gender', 'typical_recipient', 'city', 'date_of_birth'];
   const missing: OptionalProfileField[] = [];
-  if (!p.date_of_birth)     missing.push('date_of_birth');
-  if (!p.city)              missing.push('city');
-  if (!p.typical_recipient) missing.push('typical_recipient');
   if (!p.gender)            missing.push('gender');
+  if (!p.typical_recipient) missing.push('typical_recipient');
+  if (!p.city)              missing.push('city');
+  if (!p.date_of_birth)     missing.push('date_of_birth');
   return missing;
 }
 
@@ -100,12 +100,15 @@ export function profileToContext(p: UserProfile | null): string {
     const age = computeAge(p.date_of_birth);
     if (age != null) {
       parts.push(`Age: ${age} (life stage: ${lifeStageForAge(age)})`);
-      // Age-appropriate tone guide for the LLM
       parts.push(`Tone: ${age < 28 ? 'casual, internet-fluent, emojis welcome'
                           : age < 43 ? 'friendly, modern but not overly casual'
                           : age < 59 ? 'warm, professional, occasional emoji'
                           : 'respectful, clear, no slang'}`);
     }
+  } else {
+    // No DOB on file — instruct LLM to infer age group from conversation signals
+    parts.push('Age: unknown — INFER from writing style, vocabulary, emoji usage, voice tone, and image context throughout the conversation.');
+    parts.push('Tone: start neutral-friendly. Then adapt: casual/Singlish/Tanglish → warm casual; formal English → professional; heavy emoji/Gen-Z slang → internet-fluent; formal + honorifics → respectful clear. Never re-ask for age or DOB — observe and adjust.');
   }
   if (p.gender) parts.push(`Gender: ${p.gender}`);
   if (p.city) parts.push(`City: ${p.city}`);
