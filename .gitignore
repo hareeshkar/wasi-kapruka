@@ -78,7 +78,6 @@ MCP_REAL_FINDINGS.md
 WASI_ENTERPRISE_PLAN.md
 WASI_PRODUCTION_PLAN.md
 Wasi.md
-AGENTS.md
 
 # Session storage
 .wasi-session
