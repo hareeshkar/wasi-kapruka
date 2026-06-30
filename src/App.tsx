@@ -1450,7 +1450,7 @@ export default function App() {
       >
         {/* Brand */}
         <div className="mb-8 px-1 flex flex-col items-center gap-1.5">
-          {sidebarExpanded && <KaprukaLogo className="h-5" />}
+          {sidebarExpanded && <KaprukaLogo className="h-7 w-auto" />}
           <span
             className="font-display font-bold text-[15px] tracking-tight"
             style={{ color: '#402970' }}

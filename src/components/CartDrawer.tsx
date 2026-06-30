@@ -774,7 +774,7 @@ export default function CartDrawer({
       {showShareCard && orderResult && (
         <div className="bg-white border-2 border-[#402970] rounded-2xl p-4 space-y-4 shadow-xl animate-fade-in text-gray-900 select-none">
           <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-            <KaprukaLogo className="h-5" variant="default" />
+            <KaprukaLogo className="h-5" />
             <button
               onClick={() => setShowShareCard(false)}
               className="text-gray-400 hover:text-gray-900 font-bold"
@@ -786,7 +786,7 @@ export default function CartDrawer({
           {/* Graphic layout of card */}
           <div className="bg-linear-to-b from-[#FAF8F4] to-white border border-gray-100 rounded-xl p-5 text-center space-y-3 shadow-inner relative overflow-hidden">
             <div className="absolute top-0 left-0 bg-[#402970] w-12 h-12 rounded-br-3xl opacity-5" />
-            <KaprukaLogo className="h-6 mx-auto" variant="default" />
+            <KaprukaLogo className="h-6 mx-auto" />
             
             <h3 className="font-display font-bold text-[#402970] text-sm tracking-wide uppercase">
               A Gift is on its way to {selectedCity?.name || 'You'}!
