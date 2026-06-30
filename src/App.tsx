@@ -1514,29 +1514,16 @@ export default function App() {
           {/* Auth */}
           {!authLoading && (
             user ? (
-              <>
-                <button
-                  onClick={() => setProfilePromptOpen(true)}
-                  className="sidebar-item"
-                  title="Profile"
-                >
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)' }}>
-                    {(user.email?.[0] || 'U').toUpperCase()}
-                  </div>
-                  {sidebarExpanded && <span className="sidebar-label text-[12px] font-medium truncate">{user.email?.split('@')[0] || appT('account', language)}</span>}
-                </button>
-                <button
-                  onClick={() => signOut()}
-                  className="sidebar-item"
-                  title="Sign out"
-                  style={{ color: 'rgba(180, 60, 60, 0.6)' }}
-                >
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(180, 60, 60, 0.06)' }}>
-                    <LogOut className="w-4 h-4" />
-                  </div>
-                  {sidebarExpanded && <span className="sidebar-label text-[12px] font-medium">Sign out</span>}
-                </button>
-              </>
+              <button
+                onClick={() => setProfilePromptOpen(true)}
+                className="sidebar-item"
+                title="Profile"
+              >
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)' }}>
+                  {(user.email?.[0] || 'U').toUpperCase()}
+                </div>
+                {sidebarExpanded && <span className="sidebar-label text-[12px] font-medium truncate">{user.email?.split('@')[0] || appT('account', language)}</span>}
+              </button>
             ) : (
               <button
                 onClick={() => setSignInOpen(true)}
@@ -1599,6 +1586,21 @@ export default function App() {
             </div>
             {sidebarExpanded && <span className="sidebar-label text-[12px] font-medium">{appT('cart', language)}</span>}
           </button>
+
+          {/* Sign out — last option, signed-in only */}
+          {user && (
+            <button
+              onClick={() => signOut()}
+              className="sidebar-item"
+              title="Sign out"
+              style={{ color: 'rgba(180, 60, 60, 0.6)' }}
+            >
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(180, 60, 60, 0.06)' }}>
+                <LogOut className="w-4 h-4" />
+              </div>
+              {sidebarExpanded && <span className="sidebar-label text-[12px] font-medium">Sign out</span>}
+            </button>
+          )}
         </nav>
 
         {/* Collapse toggle — right-aligned */}
