@@ -110,6 +110,41 @@ export interface Category {
   children?: Array<{ name: string; url?: string }>;
 }
 
+export interface TrackingProgressStep {
+  step?: string;
+  event?: string;
+  timestamp: string;
+}
+
+export interface TrackingRecipient {
+  name?: string;
+  city?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface OrderTrackingData {
+  order_number?: string;
+  status?: string;
+  status_display?: string;
+  comments?: string;
+  progress?: TrackingProgressStep[];
+  timeline?: TrackingProgressStep[];
+  recipient?: TrackingRecipient;
+  amount?: { value: string | number; currency: string };
+  items?: Array<{ product_code?: string; name: string; quantity?: number }>;
+  order_date?: string;
+  delivery_date?: string;
+  shipped_date?: string;
+  greeting_message?: string;
+  special_instructions?: string;
+  has_delivery_photo?: boolean;
+  has_delivery_video?: boolean;
+  live_tracking_available?: boolean;
+  pnref?: string;
+  payment_method?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -120,7 +155,7 @@ export interface Message {
   checking_delivery?: boolean;
   delivery_checked?: DeliveryCheckResult;
   order_created?: Order;
-  tracking_result?: any;
+  tracking_result?: OrderTrackingData;
   order_intent?: OrderIntent;
   /** Pagination state from the last product search — lets "show me more"
    *  continue from page 2 instead of repeating page 1. */
