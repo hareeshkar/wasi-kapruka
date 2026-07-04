@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Copy, Check, Share2, ExternalLink, MapPin, Calendar, MessageSquare, User, RefreshCw, Lock, LockOpen } from 'lucide-react';
+import { AlertCircle, Copy, Check, Share2, ExternalLink, MapPin, Calendar, RefreshCw, Lock, LockOpen, Loader2 } from 'lucide-react';
 import { CartItem, Order } from '../types';
 import { formatPrice, type Currency } from '../lib/currency';
 
@@ -20,453 +20,453 @@ interface OrderConfirmationCardProps {
   onRenew?: () => void;
   onShare?: () => void;
   lang?: 'en' | 'si' | 'ta';
+  /** Shown while create-order is in flight */
+  isLoading?: boolean;
+  /** Server or validation error — takes precedence over active card */
+  errorMessage?: string | null;
+  /** Retry checkout after error */
+  onRetry?: () => void;
 }
 
+const LOCALE = {
+  en: {
+    lockActive: 'Lock active',
+    expiringSoon: 'Expiring soon',
+    lockExpired: 'Lock expired',
+    readyToPay: 'Ready to pay',
+    orderExpired: 'Reference expired',
+    relockPrice: 'Re-lock price — 60 min',
+    expiredMessage: 'This reference has expired. Start a new order in chat.',
+    lockedTotal: 'Total',
+    previousTotal: 'Was',
+    calculating: 'Calculating…',
+    delivery: 'Delivery',
+    addons: 'Add-ons',
+    recipientPending: 'Recipient TBD',
+    lockWarning: 'Less than 5 min left on price lock',
+    renewLock: 'Renew — 60 min',
+    payOnKapruka: 'Pay on Kapruka',
+    payUnavailable: 'Payment link unavailable',
+    copyLink: 'Copy',
+    copied: 'Copied',
+    shareCard: 'Share',
+    reference: 'Ref',
+    expiredSublabel: 'done',
+    leftSublabel: 'left',
+    loadingTitle: 'Locking your order',
+    loadingHint: 'Confirming prices with Kapruka…',
+    errorTitle: 'Checkout failed',
+    errorDefault: 'Kapruka did not return a checkout link. Try again or adjust delivery details.',
+    incompleteTitle: 'Order incomplete',
+    incompleteHint: 'Missing reference or payment link. Re-lock or start checkout again.',
+    retry: 'Try again',
+    copyFailed: 'Could not copy link',
+  },
+  si: {
+    lockActive: 'Lock active',
+    expiringSoon: 'ඉක්මනින් expire',
+    lockExpired: 'Lock expired',
+    readyToPay: 'Pay කරන්න',
+    orderExpired: 'Reference expired',
+    relockPrice: 'Price re-lock — 60 min',
+    expiredMessage: 'Reference expired. Chat එකෙන් අලුත් order එකක් දාන්න.',
+    lockedTotal: 'Total',
+    previousTotal: 'Was',
+    calculating: 'Calculate වෙනවා…',
+    delivery: 'Delivery',
+    addons: 'Add-ons',
+    recipientPending: 'Recipient TBD',
+    lockWarning: 'Price lock එකට 5 min ට අඩු',
+    renewLock: 'Renew — 60 min',
+    payOnKapruka: 'Kapruka වල Pay කරන්න',
+    payUnavailable: 'Payment link නැහැ',
+    copyLink: 'Copy',
+    copied: 'Copied',
+    shareCard: 'Share',
+    reference: 'Ref',
+    expiredSublabel: 'done',
+    leftSublabel: 'left',
+    loadingTitle: 'Order lock වෙනවා',
+    loadingHint: 'Kapruka prices confirm වෙනවා…',
+    errorTitle: 'Checkout fail',
+    errorDefault: 'Checkout link එක නැහැ. නැවත try කරන්න.',
+    incompleteTitle: 'Order incomplete',
+    incompleteHint: 'Reference හෝ payment link missing. Re-lock කරන්න.',
+    retry: 'Try again',
+    copyFailed: 'Copy fail',
+  },
+  ta: {
+    lockActive: 'Lock active',
+    expiringSoon: 'விரைவில் expire',
+    lockExpired: 'Lock expired',
+    readyToPay: 'Pay பண்ணுங்க',
+    orderExpired: 'Reference expired',
+    relockPrice: 'Price re-lock — 60 min',
+    expiredMessage: 'Reference expire ஆயிடுச்சு. Chat-ல புது order start பண்ணுங்க.',
+    lockedTotal: 'Total',
+    previousTotal: 'Was',
+    calculating: 'Calculate ஆகுது…',
+    delivery: 'Delivery',
+    addons: 'Add-ons',
+    recipientPending: 'Recipient TBD',
+    lockWarning: 'Price lock-க்கு 5 min-க்கு குறைவு',
+    renewLock: 'Renew — 60 min',
+    payOnKapruka: 'Kapruka-ல Pay பண்ணுங்க',
+    payUnavailable: 'Payment link இல்லை',
+    copyLink: 'Copy',
+    copied: 'Copied',
+    shareCard: 'Share',
+    reference: 'Ref',
+    expiredSublabel: 'done',
+    leftSublabel: 'left',
+    loadingTitle: 'Order lock ஆகுது',
+    loadingHint: 'Kapruka prices confirm ஆகுது…',
+    errorTitle: 'Checkout fail',
+    errorDefault: 'Checkout link வரல. மறுபடி try பண்ணுங்க.',
+    incompleteTitle: 'Order incomplete',
+    incompleteHint: 'Reference அல்லது payment link missing.',
+    retry: 'Try again',
+    copyFailed: 'Copy fail',
+  },
+};
+
 const TOTAL_SECS = 3600;
-const ARC_R = 22;
+const ARC_R = 18;
 const ARC_CIRC = 2 * Math.PI * ARC_R;
 
+function ArcTimer({ mm, ss, dashOffset, arcColor, textColor, sublabel }: {
+  mm: string; ss: string; dashOffset: number; arcColor: string; textColor: string; sublabel: string;
+}) {
+  return (
+    <svg viewBox="0 0 44 44" width="40" height="40" aria-label={`${mm}:${ss} ${sublabel}`} className="flex-shrink-0">
+      <circle cx="22" cy="22" r={ARC_R} fill="none" stroke="rgba(64,41,112,0.08)" strokeWidth="2.5" />
+      <circle cx="22" cy="22" r={ARC_R} fill="none" stroke={arcColor} strokeWidth="2.5" strokeLinecap="round"
+        strokeDasharray={`${ARC_CIRC} ${ARC_CIRC}`} strokeDashoffset={dashOffset}
+        transform="rotate(-90 22 22)" style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease' }} />
+      <text x="22" y="21" textAnchor="middle" dominantBaseline="central"
+        fontFamily="'JetBrains Mono', monospace" fontSize="8" fontWeight="700" fill={textColor}>{mm}:{ss}</text>
+    </svg>
+  );
+}
+
+function isOrderActionable(order: Order): boolean {
+  return Boolean(
+    (order.order_ref && order.order_ref.trim()) ||
+    (order.pay_url && order.pay_url.trim()) ||
+    (order.order_id && order.order_id.trim())
+  );
+}
+
 export default function OrderConfirmationCard({
-  order,
-  cart = [],
-  currency = 'LKR',
-  deliveryMeta,
-  onRenew,
-  onShare,
+  order, cart = [], currency = 'LKR', deliveryMeta, onRenew, onShare, lang = 'en',
+  isLoading = false, errorMessage = null, onRetry,
 }: OrderConfirmationCardProps) {
+  const t = LOCALE[lang] || LOCALE.en;
+  const fontClass = lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : '';
+
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     const ms = new Date(order.expires_at).getTime();
     return isNaN(ms) ? 0 : Math.max(0, Math.floor((ms - Date.now()) / 1000));
   });
   const [copySuccess, setCopySuccess] = useState(false);
+  const [copyError, setCopyError] = useState(false);
 
   useEffect(() => {
     const expiresMs = new Date(order.expires_at).getTime();
-    if (isNaN(expiresMs)) {
-      setTimeLeft(0);
-      return;
-    }
-
+    if (isNaN(expiresMs)) { setTimeLeft(0); return; }
     const calc = () => Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
     setTimeLeft(calc());
-
-    if (calc() <= 0) return; // already expired — no interval needed
-
+    if (calc() <= 0) return;
     const interval = setInterval(() => {
       const remaining = calc();
       setTimeLeft(remaining);
       if (remaining <= 0) clearInterval(interval);
     }, 1000);
-
     return () => clearInterval(interval);
   }, [order.expires_at]);
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!order.pay_url) return;
-    navigator.clipboard.writeText(order.pay_url);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+    setCopyError(false);
+    try {
+      await navigator.clipboard.writeText(order.pay_url);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      setCopyError(true);
+      setTimeout(() => setCopyError(false), 3000);
+    }
   };
 
   const effectiveCurrency = (order.summary?.currency || currency) as Currency;
   const total = order.total_lkr || order.summary?.grand_total || 0;
-  // Prefer MCP summary fields — they're authoritative; computed cart totals are fallback only
   const summaryDeliveryFee = order.summary?.delivery_fee ?? null;
   const summaryAddonsTotal = order.summary?.addons_total ?? null;
   const cartItemsTotal = cart.reduce((s, i) => s + i.price_lkr * i.quantity, 0);
   const deliveryFee = summaryDeliveryFee ?? Math.max(0, total - cartItemsTotal);
-  const hasPayUrl = Boolean(order.pay_url);
+  const hasPayUrl = Boolean(order.pay_url?.trim());
+  const orderActionable = isOrderActionable(order);
 
-  // Arc timer derived state
-  const progress = Math.min(1, Math.max(0, timeLeft / TOTAL_SECS));
-  const dashOffset = ARC_CIRC * (1 - progress);
-  const isExpired = timeLeft <= 0;
-  const isWarning = timeLeft <= 300 && !isExpired;
-  const arcColor = isExpired ? 'rgba(255,255,255,0.15)' : isWarning ? '#F59E0B' : '#7B5EA7';
+  const dashOffset = ARC_CIRC * (1 - Math.min(1, Math.max(0, timeLeft / TOTAL_SECS)));
+  const isExpired = !isLoading && !errorMessage && orderActionable && timeLeft <= 0;
+  const isWarning = !isLoading && !errorMessage && orderActionable && timeLeft <= 300 && !isExpired;
+  const arcColor = isExpired ? '#D1D5DB' : isWarning ? '#F59E0B' : '#7B5EA7';
+  const arcTextColor = isExpired ? '#B0A8BC' : isWarning ? '#D97706' : '#402970';
   const mm = Math.floor(timeLeft / 60).toString().padStart(2, '0');
   const ss = (timeLeft % 60).toString().padStart(2, '0');
 
-  // ── Expired state — completely different UI ──────────────────────────────
+  const deliveryDateStr = deliveryMeta?.deliveryDate && (() => {
+    const d = new Date(deliveryMeta.deliveryDate!);
+    return isNaN(d.getTime())
+      ? deliveryMeta.deliveryDate
+      : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  })();
+
+  const hasDelivery = deliveryMeta && (deliveryMeta.recipientName || deliveryMeta.city || deliveryMeta.deliveryDate || deliveryMeta.giftMessage);
+  const hasBreakdown = cart.length > 0 || deliveryFee > 0 || (summaryAddonsTotal != null && summaryAddonsTotal > 0);
+
+  // ── Loading ───────────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className={`w-full max-w-lg glass-bubble rounded-xl overflow-hidden animate-fade-in ${fontClass}`} role="status" aria-live="polite">
+        <div className="px-3 py-2 border-b border-ink/5 bg-violet-tint/60 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 text-violet animate-spin flex-shrink-0" />
+          <div>
+            <p className="text-[11px] font-bold text-ink">{t.loadingTitle}</p>
+            <p className="text-[9px] font-mono text-ink-faint">{t.loadingHint}</p>
+          </div>
+        </div>
+        <div className="px-3 py-3 space-y-2">
+          <div className="h-6 w-32 rounded bg-violet/10 animate-pulse" />
+          <div className="h-3 w-full rounded bg-ink/5 animate-pulse" />
+          <div className="h-3 w-2/3 rounded bg-ink/5 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error from server / network ───────────────────────────────────────────
+  if (errorMessage) {
+    return (
+      <div className={`w-full max-w-lg glass-bubble rounded-xl overflow-hidden animate-fade-in ${fontClass}`} role="alert">
+        <div className="px-3 py-2 border-b border-red-200/60 bg-red-50/80 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <p className="text-[11px] font-bold text-red-900">{t.errorTitle}</p>
+        </div>
+        <div className="px-3 py-2.5 space-y-2">
+          <p className="text-[11px] font-mono text-ink-muted leading-relaxed">{errorMessage}</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry}
+              className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-mono font-bold text-[10px] uppercase tracking-wide cursor-pointer bg-violet text-white hover:bg-violet-mid active:scale-[0.98]">
+              <RefreshCw className="w-3 h-3" />{t.retry}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Empty / malformed MCP response ────────────────────────────────────────
+  if (!orderActionable) {
+    return (
+      <div className={`w-full max-w-lg glass-bubble rounded-xl overflow-hidden animate-fade-in ${fontClass}`} role="alert">
+        <div className="px-3 py-2 border-b border-amber-200/60 bg-amber-50/80 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0" />
+          <p className="text-[11px] font-bold text-amber-900">{t.incompleteTitle}</p>
+        </div>
+        <div className="px-3 py-2.5 space-y-2">
+          <p className="text-[11px] font-mono text-ink-muted leading-relaxed">{t.incompleteHint}</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry}
+              className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-mono font-bold text-[10px] uppercase tracking-wide cursor-pointer bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 active:scale-[0.98]">
+              <RefreshCw className="w-3 h-3" />{t.retry}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (isExpired) {
     return (
-      <div
-        className="text-white rounded-2xl overflow-hidden animate-fade-in relative select-none"
-        style={{
-          background: 'linear-gradient(145deg, #18141E 0%, #0E0C14 100%)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-        }}
-      >
-        <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.1) 0%, transparent 100%)' }} />
-        <div className="p-5 space-y-4">
-          {/* Expired header */}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <LockOpen className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }} />
-              <span
-                className="text-[9px] font-mono font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full"
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.35)',
-                }}
-              >
-                Price lock expired
-              </span>
-            </div>
-            <svg viewBox="0 0 56 56" width="46" height="46" aria-label="Expired">
-              <circle cx="28" cy="28" r={ARC_R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
-              <text x="28" y="26" textAnchor="middle" dominantBaseline="central"
-                fontFamily="'JetBrains Mono', monospace" fontSize="9" fontWeight="700"
-                fill="rgba(255,255,255,0.25)">--:--</text>
-              <text x="28" y="37" textAnchor="middle" dominantBaseline="central"
-                fontFamily="'JetBrains Mono', monospace" fontSize="6.5"
-                fill="rgba(255,255,255,0.15)">expired</text>
-            </svg>
-          </div>
-
-          {/* Dimmed total */}
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono tracking-[0.15em] uppercase" style={{ color: 'rgba(255,255,255,0.2)' }}>
-              Order total
+      <div className={`w-full max-w-lg glass-bubble rounded-xl overflow-hidden animate-fade-in ${fontClass}`}>
+        <div className="px-3 py-2 border-b border-ink/5 bg-gray-50/80 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <LockOpen className="w-3 h-3 text-ink-faint flex-shrink-0" />
+            <span className="text-[9px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-gray-100 text-ink-faint border border-ink/5">
+              {t.lockExpired}
             </span>
-            {total > 0 && (
-              <p className="font-display leading-none tracking-tight" style={{ fontSize: '1.75rem', color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>
-                {formatPrice(total, effectiveCurrency)}
-              </p>
-            )}
+            <span className="text-[11px] font-bold text-ink-muted truncate">{t.orderExpired}</span>
           </div>
-
-          {/* Delivery meta if available */}
-          {deliveryMeta?.city && (
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.2)' }} />
-              <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                {deliveryMeta.recipientName && `${deliveryMeta.recipientName} · `}{deliveryMeta.city}
-              </span>
+          <ArcTimer mm="--" ss="--" dashOffset={ARC_CIRC} arcColor="#D1D5DB" textColor="#B0A8BC" sublabel={t.expiredSublabel} />
+        </div>
+        <div className="px-3 py-2.5 space-y-2">
+          {total > 0 && (
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] font-mono text-ink-faint">{t.previousTotal}</span>
+              <span className="font-display text-lg font-semibold text-ink-faint">{formatPrice(total, effectiveCurrency)}</span>
             </div>
           )}
-
-          {/* Renew or info */}
+          {deliveryMeta?.city && (
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-ink-muted">
+              <MapPin className="w-3 h-3 text-violet-soft flex-shrink-0" />
+              {deliveryMeta.recipientName && <span>{deliveryMeta.recipientName} · </span>}
+              {deliveryMeta.city}
+            </div>
+          )}
           {onRenew ? (
-            <button
-              onClick={onRenew}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-mono font-bold text-xs uppercase tracking-wider transition-all duration-150 active:scale-[0.98] cursor-pointer"
-              style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#FCD34D' }}
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Re-lock price — new 60 min window
+            <button onClick={onRenew}
+              className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-mono font-bold text-[10px] uppercase tracking-wide cursor-pointer bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 active:scale-[0.98]">
+              <RefreshCw className="w-3 h-3" />{t.relockPrice}
             </button>
           ) : (
-            <div
-              className="rounded-xl p-3 text-center"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-            >
-              <p className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                This order reference has expired.
-              </p>
-              <p className="text-[10px] font-mono mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                Start a new order in the chat ↑
-              </p>
-            </div>
+            <p className="text-[10px] font-mono text-ink-muted text-center">{t.expiredMessage}</p>
           )}
-
-          {/* Footer ref */}
-          <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-[8px] font-mono tracking-[0.15em] uppercase mb-0.5" style={{ color: 'rgba(255,255,255,0.15)' }}>Reference</p>
-            <p className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.25)' }}>{order.order_ref || '—'}</p>
+          <div className="flex justify-between items-center pt-1 border-t border-ink/5 text-[9px] font-mono text-ink-faint">
+            <span>{t.reference} · <strong className="text-ink-muted">{order.order_ref || '—'}</strong></span>
+            <span>Kapruka</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Active (non-expired) state ───────────────────────────────────────────
   return (
-    <div
-      className="text-white rounded-2xl overflow-hidden animate-fade-in relative select-none"
-      style={{
-        background: 'linear-gradient(145deg, #1A1228 0%, #0F0C1E 50%, #0D0A18 100%)',
-        border: '1px solid rgba(123, 94, 167, 0.25)',
-        boxShadow: '0 20px 60px rgba(13, 10, 24, 0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
-      }}
-    >
-      {/* Subtle diagonal texture */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.025]"
-        style={{ backgroundImage: 'repeating-linear-gradient(45deg, #ffffff 0px, #ffffff 1px, transparent 1px, transparent 10px)' }}
-      />
-
-      {/* Top accent line */}
-      <div className="h-[2px] w-full" style={{ background: 'linear-gradient(90deg, #402970 0%, #7B5EA7 60%, transparent 100%)' }} />
-
-      <div className="p-5 space-y-4 relative">
-
-        {/* ── Header: status badge + arc timer ─────────────────────────── */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isWarning ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'}`} />
-            <span
-              className="text-[9px] font-mono font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full"
-              style={{
-                background: isWarning ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                border: isWarning ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)',
-                color: isWarning ? '#FCD34D' : '#6EE7B7',
-              }}
-            >
-              <Lock className="w-2.5 h-2.5 inline-block mr-1 opacity-70" />
-              {isWarning ? 'Expiring soon' : 'Payment lock active'}
+    <div className={`relative w-full max-w-lg glass-bubble rounded-xl overflow-hidden animate-fade-in ${fontClass}`}>
+      <div className="foil-edge w-full" />
+      <div className={`px-3 py-2 border-b border-ink/5 flex items-center gap-2 ${
+        isWarning ? 'bg-amber-50/80' : 'bg-violet-tint/60'
+      }`}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isWarning ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
+            <span className={`inline-flex items-center gap-0.5 text-[8px] font-mono font-bold uppercase tracking-wide px-1.5 py-px rounded-full border ${
+              isWarning ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}>
+              <Lock className="w-2 h-2 opacity-70" />
+              {isWarning ? t.expiringSoon : t.lockActive}
             </span>
+            <span className="text-[10px] font-mono font-bold text-ink-muted truncate">{t.readyToPay}</span>
           </div>
-
-          {/* Depleting arc timer */}
-          <div className="flex-shrink-0 relative" style={{ width: 54, height: 54 }}>
-            <svg viewBox="0 0 56 56" width="54" height="54" aria-label={`${mm}:${ss} remaining`}>
-              <circle cx="28" cy="28" r={ARC_R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="2.5" />
-              <circle
-                cx="28" cy="28" r={ARC_R} fill="none"
-                stroke={arcColor}
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeDasharray={`${ARC_CIRC} ${ARC_CIRC}`}
-                strokeDashoffset={dashOffset}
-                transform="rotate(-90 28 28)"
-                style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease' }}
-              />
-              <text x="28" y="26" textAnchor="middle" dominantBaseline="central"
-                fontFamily="'JetBrains Mono', monospace" fontSize="9.5" fontWeight="700"
-                fill={isWarning ? '#F59E0B' : 'rgba(255,255,255,0.85)'}
-                style={{ transition: 'fill 0.5s ease' }}>
-                {mm}:{ss}
-              </text>
-              <text x="28" y="37" textAnchor="middle" dominantBaseline="central"
-                fontFamily="'JetBrains Mono', monospace" fontSize="6.5" fill="rgba(255,255,255,0.3)">
-                left
-              </text>
-            </svg>
-          </div>
-        </div>
-
-        {/* ── Total amount ──────────────────────────────────────────────── */}
-        <div className="space-y-1 pt-1">
-          <span className="text-[9px] font-mono tracking-[0.15em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            Locked total
-          </span>
           {total > 0 ? (
-            <p className="font-display leading-none tracking-tight" style={{ fontSize: '2rem', color: '#E8C96B', fontWeight: 600 }}>
+            <p className="font-display text-xl font-bold text-violet-deep leading-none tracking-tight">
               {formatPrice(total, effectiveCurrency)}
             </p>
           ) : (
-            <p className="font-mono text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>Calculating…</p>
+            <p className="font-mono text-xs text-ink-faint">{t.calculating}</p>
           )}
         </div>
+        <ArcTimer mm={mm} ss={ss} dashOffset={dashOffset} arcColor={arcColor} textColor={arcTextColor} sublabel={t.leftSublabel} />
+      </div>
 
-        {/* ── Item breakdown (only when cart has real ordered items) ────── */}
-        {cart.length > 0 && (
-          <div
-            className="rounded-xl p-3 space-y-2"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            {cart.map((item, i) => (
-              <div key={`${item.product_code}-${i}`} className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-mono truncate" style={{ color: 'rgba(255,255,255,0.6)', maxWidth: '60%' }}>
-                  {item.name}
+      <div className="px-3 py-2 space-y-2">
+        {hasDelivery && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-mono text-ink-muted">
+            {(deliveryMeta!.recipientName || deliveryMeta!.senderName) && (
+              <span>
+                {deliveryMeta!.senderName && <span className="text-ink-faint">{deliveryMeta!.senderName} → </span>}
+                <span className="font-semibold text-violet-deep">
+                  {deliveryMeta!.recipientName || t.recipientPending}
                 </span>
-                <span className="flex-1 border-b border-dashed border-white/10 mx-1 mb-0.5" />
-                <span className="text-[10px] font-mono flex-shrink-0" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  {item.quantity > 1 && <span className="opacity-50 mr-1">×{item.quantity}</span>}
+              </span>
+            )}
+            {deliveryMeta!.city && (
+              <span className="inline-flex items-center gap-0.5">
+                <MapPin className="w-2.5 h-2.5 text-violet-soft" />{deliveryMeta!.city}
+              </span>
+            )}
+            {deliveryDateStr && (
+              <span className="inline-flex items-center gap-0.5">
+                <Calendar className="w-2.5 h-2.5 text-violet-soft" />{deliveryDateStr}
+              </span>
+            )}
+            {deliveryMeta!.giftMessage && (
+              <span className="w-full ai-pullquote text-[10px] leading-snug line-clamp-1 border-violet/20 pl-2 mt-0.5">
+                "{deliveryMeta!.giftMessage.length > 60 ? deliveryMeta!.giftMessage.slice(0, 60) + '…' : deliveryMeta!.giftMessage}"
+              </span>
+            )}
+          </div>
+        )}
+
+        {hasBreakdown && (
+          <div className="rounded-lg bg-white/70 border border-ink/5 px-2.5 py-2 space-y-1">
+            {cart.map((item, i) => (
+              <div key={`${item.product_code}-${i}`} className="flex items-center justify-between gap-1.5">
+                <span className="text-[10px] font-mono text-ink-muted truncate">{item.name}</span>
+                <span className="text-[10px] font-mono font-semibold text-ink flex-shrink-0">
+                  {item.quantity > 1 && <span className="text-ink-faint mr-0.5">×{item.quantity}</span>}
                   {formatPrice(item.price_lkr * item.quantity, (item.currency || currency) as Currency)}
                 </span>
               </div>
             ))}
-            {(deliveryFee > 0 || summaryAddonsTotal != null) && (
-              <div className="pt-2 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                {deliveryFee > 0 && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>Delivery</span>
-                    <span className="flex-1 border-b border-dashed border-white/10 mx-1 mb-0.5" />
-                    <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      {formatPrice(deliveryFee, effectiveCurrency)}
-                    </span>
-                  </div>
-                )}
-                {summaryAddonsTotal != null && summaryAddonsTotal > 0 && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>Add-ons</span>
-                    <span className="flex-1 border-b border-dashed border-white/10 mx-1 mb-0.5" />
-                    <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      {formatPrice(summaryAddonsTotal, effectiveCurrency)}
-                    </span>
-                  </div>
-                )}
+            {deliveryFee > 0 && (
+              <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-ink/5">
+                <span className="text-[9px] font-mono text-ink-faint">{t.delivery}</span>
+                <span className="text-[10px] font-mono text-ink-muted">{formatPrice(deliveryFee, effectiveCurrency)}</span>
+              </div>
+            )}
+            {summaryAddonsTotal != null && summaryAddonsTotal > 0 && (
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-[9px] font-mono text-ink-faint">{t.addons}</span>
+                <span className="text-[10px] font-mono text-ink-muted">{formatPrice(summaryAddonsTotal, effectiveCurrency)}</span>
               </div>
             )}
           </div>
         )}
 
-        {/* ── Delivery meta — recipient, date, city, gift message ───────── */}
-        {deliveryMeta && (deliveryMeta.recipientName || deliveryMeta.city || deliveryMeta.deliveryDate || deliveryMeta.giftMessage) && (
-          <div
-            className="rounded-xl p-3 space-y-2"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            {/* Sender → Recipient */}
-            {(deliveryMeta.recipientName || deliveryMeta.senderName) && (
-              <div className="flex items-center gap-2">
-                <User className="w-3 h-3 flex-shrink-0" style={{ color: '#7B5EA7' }} />
-                <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  {deliveryMeta.senderName && (
-                    <span className="opacity-60">{deliveryMeta.senderName} → </span>
-                  )}
-                  {deliveryMeta.recipientName
-                    ? <span style={{ color: '#E8C96B' }}>{deliveryMeta.recipientName}</span>
-                    : <span className="opacity-40 italic">Recipient pending</span>}
-                </span>
-              </div>
-            )}
-            {/* City + Date */}
-            {(deliveryMeta.city || deliveryMeta.deliveryDate) && (
-              <div className="flex items-center gap-4 flex-wrap">
-                {deliveryMeta.city && (
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: '#7B5EA7' }} />
-                    <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                      {deliveryMeta.city}
-                    </span>
-                  </div>
-                )}
-                {deliveryMeta.deliveryDate && (() => {
-                  const d = new Date(deliveryMeta.deliveryDate!);
-                  const dateStr = isNaN(d.getTime())
-                    ? deliveryMeta.deliveryDate
-                    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                  return (
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3 h-3 flex-shrink-0" style={{ color: '#7B5EA7' }} />
-                      <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                        {dateStr}
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-            {/* Gift message preview */}
-            {deliveryMeta.giftMessage && (
-              <div className="flex items-start gap-1.5">
-                <MessageSquare className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: '#7B5EA7' }} />
-                <p className="text-[10px] font-mono italic leading-relaxed line-clamp-2"
-                  style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  "{deliveryMeta.giftMessage.length > 90
-                    ? deliveryMeta.giftMessage.slice(0, 90) + '…'
-                    : deliveryMeta.giftMessage}"
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Renewal warning (T-5min, only while active) ───────────────── */}
         {isWarning && (
-          <div
-            className="rounded-xl p-3 space-y-2"
-            style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)' }}
-          >
-            <p className="flex items-center gap-1.5 text-[11px] font-mono font-medium" style={{ color: '#FCD34D' }}>
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-              Price lock expires in less than 5 min
-            </p>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 flex items-center gap-2">
+            <AlertCircle className="w-3 h-3 text-amber-600 flex-shrink-0" />
+            <p className="text-[10px] font-mono text-amber-800 flex-1">{t.lockWarning}</p>
             {onRenew && (
-              <button
-                onClick={onRenew}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer"
-                style={{ background: '#F59E0B', color: '#1C1400' }}
-              >
-                <RefreshCw className="w-3 h-3" />
-                Renew price lock — 60 mins
+              <button onClick={onRenew}
+                className="flex-shrink-0 flex items-center gap-1 py-1 px-2 rounded-md text-[9px] font-mono font-bold uppercase cursor-pointer bg-amber-500 text-white hover:bg-amber-600">
+                <RefreshCw className="w-2.5 h-2.5" />{t.renewLock}
               </button>
             )}
           </div>
         )}
 
-        {/* ── Primary CTA ───────────────────────────────────────────────── */}
-        <div className="space-y-2 pt-1">
-          {hasPayUrl ? (
-            <button
-              type="button"
-              onClick={() => window.open(order.pay_url, '_blank', 'noopener,noreferrer')}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-display font-semibold text-sm text-white transition-all duration-150 active:scale-[0.98] cursor-pointer"
-              style={{
-                background: 'linear-gradient(135deg, #402970 0%, #5B3E8A 100%)',
-                border: '1px solid rgba(123, 94, 167, 0.4)',
-                boxShadow: '0 4px 16px rgba(64, 41, 112, 0.4)',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 6px 24px rgba(64, 41, 112, 0.6)')}
-              onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 4px 16px rgba(64, 41, 112, 0.4)')}
-            >
-              <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-              Complete payment on Kapruka
+        {hasPayUrl ? (
+          <button type="button" onClick={() => window.open(order.pay_url, '_blank', 'noopener,noreferrer')}
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-display font-semibold text-[13px] text-white cursor-pointer bg-violet hover:bg-violet-mid active:scale-[0.98] shadow-sm">
+            <ExternalLink className="w-3.5 h-3.5" />{t.payOnKapruka}
+          </button>
+        ) : (
+          <div className="w-full py-2 px-3 rounded-lg text-xs font-mono text-center bg-amber-50 border border-amber-200 text-amber-800">
+            {t.payUnavailable}
+          </div>
+        )}
+
+        <div className={`grid gap-1.5 ${onShare ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <button type="button" onClick={handleCopyLink} disabled={!hasPayUrl}
+            className={`flex items-center justify-center gap-1 py-1.5 max-sm:py-2.5 px-2 rounded-lg text-[10px] font-mono font-semibold cursor-pointer disabled:opacity-30 border ${
+              copySuccess ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : copyError ? 'bg-red-50 text-red-700 border-red-200'
+                : 'bg-white text-ink-muted border-ink/10 hover:border-violet/20'
+            }`}>
+            {copySuccess ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copySuccess ? t.copied : copyError ? t.copyFailed : t.copyLink}
+          </button>
+          <a href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+            `My Kapruka order from Wasi\n\nOrder: ${order.order_ref}\n${deliveryMeta?.city ? `Delivering to: ${deliveryMeta.city}\n` : ''}${deliveryMeta?.deliveryDate ? `Date: ${deliveryMeta.deliveryDate}\n` : ''}Total: ${formatPrice(total, effectiveCurrency)}\n\nPay here: ${order.pay_url || ''}`
+          )}`} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center gap-1 py-1.5 max-sm:py-2.5 px-2 rounded-lg text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+            <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            WhatsApp
+          </a>
+          {onShare && (
+            <button type="button" onClick={onShare}
+              className="flex items-center justify-center gap-1 py-1.5 max-sm:py-2.5 px-2 rounded-lg text-[10px] font-mono font-semibold cursor-pointer bg-gold-light text-amber-800 border border-amber-200/60 hover:bg-amber-50">
+              <Share2 className="w-3 h-3" />{t.shareCard}
             </button>
-          ) : (
-            <div
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-mono"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }}
-            >
-              Payment link unavailable
-            </div>
           )}
-
-          {/* Secondary row: copy + share */}
-          <div className={`grid gap-2 ${onShare ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              disabled={!hasPayUrl}
-              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[11px] font-mono font-semibold transition-all duration-150 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{
-                background: copySuccess ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.06)',
-                border: copySuccess ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255,255,255,0.1)',
-                color: copySuccess ? '#6EE7B7' : 'rgba(255,255,255,0.65)',
-              }}
-            >
-              {copySuccess ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copySuccess ? 'Copied!' : 'Copy link'}
-            </button>
-
-            {onShare && (
-              <button
-                type="button"
-                onClick={onShare}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[11px] font-mono font-semibold transition-all duration-150 cursor-pointer"
-                style={{
-                  background: 'rgba(232, 201, 107, 0.08)',
-                  border: '1px solid rgba(232, 201, 107, 0.2)',
-                  color: '#E8C96B',
-                }}
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                Share gift card
-              </button>
-            )}
-          </div>
         </div>
 
-        {/* ── Footer: reference ID ───────────────────────────────────────── */}
-        <div className="pt-3 flex justify-between items-center" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-          <div>
-            <p className="text-[8px] font-mono tracking-[0.15em] uppercase mb-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              Reference
-            </p>
-            <p className="text-[11px] font-mono font-bold tracking-[0.12em]" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              {order.order_ref || '—'}
-            </p>
-          </div>
-          <div className="text-[8px] font-mono tracking-[0.08em] text-right" style={{ color: 'rgba(255,255,255,0.2)' }}>
-            <p>Powered by</p>
-            <p className="font-bold" style={{ color: 'rgba(255,255,255,0.35)' }}>KAPRUKA</p>
-          </div>
+        <div className="flex justify-between items-center pt-1 border-t border-ink/5 text-[9px] font-mono text-ink-faint">
+          <span>{t.reference} · <strong className="text-ink tracking-wide">{order.order_ref || '—'}</strong></span>
+          <span className="font-bold text-violet/50">Kapruka</span>
         </div>
-
       </div>
     </div>
   );

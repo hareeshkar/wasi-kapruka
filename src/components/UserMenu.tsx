@@ -63,7 +63,7 @@ export default function UserMenu({ lang = 'en', onOpenProfilePrompt }: UserMenuP
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-black/5 overflow-hidden z-40 animate-fade-in">
+        <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-black/5 overflow-hidden z-40 animate-fade-in">
           {/* Header */}
           <div className="px-4 py-3 bg-gradient-to-br from-[#EDE5F8] to-white border-b border-black/5">
             <p className="text-[11px] text-gray-500 font-mono uppercase tracking-wider">

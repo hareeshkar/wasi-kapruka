@@ -116,7 +116,7 @@ export default function CategoryExplorer({
         </div>
 
         {/* Subcategory list */}
-        <div className="p-2 max-h-[300px] overflow-y-auto">
+        <div className="p-2 max-h-[50vh] sm:max-h-[300px] overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-center text-[11px] text-ink-faint py-4">No match</p>
           ) : (
@@ -179,7 +179,7 @@ export default function CategoryExplorer({
         </p>
       </div>
 
-      <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-[320px] overflow-y-auto">
+      <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-[50vh] sm:max-h-[320px] overflow-y-auto">
         {sorted.map((cat) => {
           const childCount = cat.children?.length ?? 0;
           return (

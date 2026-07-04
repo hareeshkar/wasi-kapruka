@@ -7,6 +7,7 @@ import ChatSection from './components/ChatSection';
 import EmptyStatePlaceholder from './components/EmptyStatePlaceholder';
 import CartDrawer from './components/CartDrawer';
 import SignInPanel from './components/SignInPanel';
+import ProductTour, { isProductTourComplete } from './components/ProductTour';
 import SaveCartBanner from './components/SaveCartBanner';
 import ProgressiveProfilePrompt from './components/ProgressiveProfilePrompt';
 import ProductDetailModal from './components/ProductDetailModal';
@@ -49,6 +50,9 @@ export default function App() {
     create: createConv, updateTitle: updateConvTitle,
   } = useConversations({ ownerId });
 
+  // Product tour (first visit)
+  const [tourOpen, setTourOpen] = useState(() => !isProductTourComplete());
+
   // Cart overlay open/close
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -56,10 +60,14 @@ export default function App() {
   // Sidebar expand/collapse (expanded by default)
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
+  // Mobile: tab bar tucks away while the chat composer is focused (keyboard open)
+  const [composerFocused, setComposerFocused] = useState(false);
+
   // Cart + chat — scoped to active conversation (per-conversation persistence)
   const { cart, loading: cartLoading, addItem, removeItem, updateQty, clearCart } = useSupabaseCart({ ownerId, conversationId: activeConvId });
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderResult, setOrderResult] = useState<Order | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // Conversational state
   const { messages, loading: chatLoading, addMessage, clearMessages, replaceMessages, updateMessage, sessionId } = useSupabaseChat({ ownerId, conversationId: activeConvId });
@@ -1150,6 +1158,7 @@ export default function App() {
   const handleClearCart = async () => {
     await clearCart();
     setOrderResult(null);
+    setOrderError(null);
   };
 
   // Checkout order placement
@@ -1170,6 +1179,7 @@ export default function App() {
     order_mode?: string;
   }) => {
     setIsOrdering(true);
+    setOrderError(null);
     try {
       const res = await fetch('/api/create-order', {
         method: 'POST',
@@ -1202,6 +1212,7 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.order) {
         setOrderResult(data.order);
+        setOrderError(null);
         
         // Push checkout card to dialog history
         const orderMsg: Message = {
@@ -1212,6 +1223,14 @@ export default function App() {
           order_created: data.order
         };
         void addMessage(orderMsg);
+      } else {
+        const msg = data.error || 'Kapruka did not return a checkout link. Check delivery details and try again.';
+        setOrderError(msg);
+        setErrorToast({
+          message: msg,
+          category: 'server',
+          isRetryable: true,
+        });
       }
     } catch (err) {
       console.error('[confirmOrder]', err);
@@ -1229,6 +1248,7 @@ export default function App() {
   const handleRenewOrder = async () => {
     if (cart.length === 0) return;
     setIsOrdering(true);
+    setOrderError(null);
     try {
       const res = await fetch('/api/create-order', {
         method: 'POST',
@@ -1260,9 +1280,13 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.order) {
         setOrderResult(data.order);
+        setOrderError(null);
+      } else {
+        setOrderError(data.error || 'Could not renew price lock. Try checkout again.');
       }
     } catch (err) {
       console.error(err);
+      setOrderError('Network error while renewing price lock.');
     } finally {
       setIsOrdering(false);
     }
@@ -1273,6 +1297,7 @@ export default function App() {
     const intent = prefill || orderIntent;
     if (cart.length === 0 || !intent?.city_name || !intent?.recipient_name) return null;
     setIsOrdering(true);
+    setOrderError(null);
     try {
       const res = await fetch('/api/create-order', {
         method: 'POST',
@@ -1303,10 +1328,13 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.order) {
         setOrderResult(data.order);
+        setOrderError(null);
         return data.order;
       }
+      setOrderError(data.error || 'Checkout failed — missing Kapruka response.');
     } catch (err) {
       console.error('[chatOrder]', err);
+      setOrderError('Network error during checkout.');
     } finally {
       setIsOrdering(false);
     }
@@ -1421,17 +1449,6 @@ export default function App() {
   }; */ // END DEMO TOUR — DISABLED
 
   const sidebarWidth = sidebarExpanded ? 220 : 80;
-
-  // Force-collapse sidebar on mobile
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 640px)');
-    const handler = (e: MediaQueryListEvent | MediaQueryList) => {
-      if (e.matches) setSidebarExpanded(false);
-    };
-    handler(mq);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   return (
     <div className="min-h-screen font-sans text-ink relative" style={{ background: '#FAFAF8' }}>
@@ -1618,16 +1635,98 @@ export default function App() {
         </div>
       </aside>
 
+      {/* ── Mobile tab bar — horizontal echo of the desktop glass pill, shown only below 640px ── */}
+      <nav className={`mobile-tabbar ${composerFocused ? 'mobile-tabbar-collapsed' : ''}`} aria-label="Primary">
+        <button
+          onClick={async () => {
+            await clearCart();
+            setOrderIntent(null);
+            const conv = await createConv({ language });
+            if (conv) { setActiveConvId(conv.id); clearMessages(); }
+          }}
+          className="mobile-tabbar-item"
+          title="New conversation"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={() => {
+            const langs: Array<'en' | 'si' | 'ta'> = ['en', 'si', 'ta'];
+            const next = langs[(langs.indexOf(language) + 1) % langs.length];
+            setLanguage(next);
+          }}
+          className="mobile-tabbar-item"
+          title="Change language"
+        >
+          <Globe className="w-5 h-5" />
+          <span
+            className="absolute -bottom-0.5 -right-0.5 text-[7px] font-black font-mono px-1 rounded-full"
+            style={{ background: '#402970', color: '#fff', lineHeight: '12px' }}
+          >
+            {language === 'en' ? 'EN' : language === 'si' ? 'සි' : 'த'}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className="mobile-tabbar-item"
+          title="Cart"
+        >
+          <ShoppingBag className="w-5 h-5" />
+          {cart.length > 0 && (
+            <span
+              className="absolute -top-1 -right-1 min-w-[16px] h-[16px] text-white text-[8px] font-black rounded-full flex items-center justify-center px-0.5"
+              style={{ background: '#0d6efd', boxShadow: '0 1px 4px rgba(13,110,253,0.35)' }}
+            >{cart.length}</span>
+          )}
+        </button>
+
+        {!authLoading && (
+          user ? (
+            <button
+              onClick={() => setProfilePromptOpen(true)}
+              className="mobile-tabbar-item is-primary"
+              title="Profile"
+            >
+              <span className="text-[13px] font-bold">{(user.email?.[0] || 'U').toUpperCase()}</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setSignInOpen(true)}
+              className="mobile-tabbar-item"
+              title="Sign in"
+            >
+              <LogIn className="w-5 h-5" />
+            </button>
+          )
+        )}
+      </nav>
+
       {/* ── Main content area ──────────────────────────────────────────────── */}
       <div
-        className="flex flex-col min-h-screen transition-[margin-left] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        className={`app-shell flex flex-col min-h-screen transition-[margin-left] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${messages.length === 0 ? 'needs-tabbar-space' : ''}`}
         style={{ marginLeft: sidebarWidth + 16 }}
       >
 
-      {/* ── Main — chat fills full width ────────────────────────────────────── */}
-      <main className="flex-1 relative z-10 flex flex-col pb-6 pt-4">
+      {/* ── Main — chat fills full width ──────────────────────────────────────
+           No vertical padding here when the chat is active: ChatSection is a
+           fixed 100dvh box with its own internal scroll region (the message
+           list). Any padding added around it here pushes total document
+           height past one viewport, causing a second, page-level scrollbar
+           that fights the chat's own scroll — a "double scroll" bug. ──── */}
+      <main className={`flex-1 relative z-10 flex flex-col ${messages.length === 0 ? 'pb-6 pt-4' : ''}`}>
 
-        <div className="flex-1 flex flex-col pt-2">
+        <ProductTour
+          lang={language}
+          isSignedIn={!!user}
+          open={tourOpen && messages.length === 0}
+          onComplete={() => setTourOpen(false)}
+          onSignIn={() => setSignInOpen(true)}
+          onTryPrompt={(text) => handleSendMessage(text)}
+        />
+
+        <div className={`flex-1 flex flex-col ${messages.length === 0 ? 'pt-2' : ''}`}>
           {messages.length === 0 ? (
             <EmptyStatePlaceholder
             lang={language}
@@ -1671,6 +1770,7 @@ export default function App() {
             onViewDetails={handleViewDetails}
             onQuickReply={handleSendMessage as any}
             cartSize={cart.length}
+            onComposerFocusChange={setComposerFocused}
           />
         )}
         </div>
@@ -1694,6 +1794,8 @@ export default function App() {
               onConfirmOrder={handleConfirmOrder}
               isOrdering={isOrdering}
               orderResult={orderResult}
+              orderError={orderError}
+              onClearOrderError={() => setOrderError(null)}
               onRenewOrder={handleRenewOrder}
               isDemoMode={false}
               orderIntent={orderIntent}
@@ -1769,7 +1871,7 @@ export default function App() {
               clearMessages();
             }
           }}
-          className="fixed bottom-20 right-6 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 hover:shadow-xl cursor-pointer"
+          className="new-convo-fab fixed bottom-20 right-6 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 hover:shadow-xl cursor-pointer"
           style={{
             background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)',
             boxShadow: '0 4px 20px rgba(64,41,112,0.35)',

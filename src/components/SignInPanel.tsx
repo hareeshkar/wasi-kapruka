@@ -169,7 +169,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
         <form onSubmit={onSubmit} className="p-6 space-y-4">
           {/* First name + last name — signup only */}
           {mode === 'signup' && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-mono font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                   <User className="w-3 h-3 inline mr-1" />

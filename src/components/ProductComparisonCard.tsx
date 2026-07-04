@@ -80,7 +80,8 @@ export default function ProductComparisonCard({
           return (
             <div
               key={prod.product_code}
-              className="flex-shrink-0 w-[200px] snap-start border-r border-ink/5 last:border-r-0 flex flex-col"
+              className="flex-shrink-0 snap-start border-r border-ink/5 last:border-r-0 flex flex-col"
+              style={{ width: 'min(200px, 78vw)' }}
             >
               {/* Image */}
               <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">

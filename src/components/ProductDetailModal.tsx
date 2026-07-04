@@ -295,9 +295,8 @@ export default function ProductDetailModal({
                   key={i}
                   onClick={() => setImgIdx(i)}
                   aria-label={`Thumbnail ${i + 1}`}
-                  className="flex-shrink-0 rounded-xl overflow-hidden cursor-pointer transition-all bg-white"
+                  className="flex-shrink-0 w-[60px] h-[60px] sm:w-12 sm:h-12 rounded-xl overflow-hidden cursor-pointer transition-all bg-white"
                   style={{
-                    width: 48, height: 48,
                     border: i === imgIdx
                       ? '2.5px solid #402970'
                       : '2px solid #E5E7EB',

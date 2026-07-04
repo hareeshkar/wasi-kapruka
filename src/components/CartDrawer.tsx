@@ -35,6 +35,8 @@ interface CartDrawerProps {
   }) => void;
   isOrdering: boolean;
   orderResult: Order | null;
+  orderError?: string | null;
+  onClearOrderError?: () => void;
   onRenewOrder: () => void;
   isDemoMode: boolean;
   orderIntent?: OrderIntent | null;
@@ -49,6 +51,8 @@ export default function CartDrawer({
   onConfirmOrder,
   isOrdering,
   orderResult,
+  orderError = null,
+  onClearOrderError,
   onRenewOrder,
   isDemoMode,
   orderIntent,
@@ -342,7 +346,7 @@ export default function CartDrawer({
           </p>
         </div>
       ) : (
-        <div className="space-y-4 max-h-48 overflow-y-auto pr-1">
+        <div className="space-y-4 max-h-[45vh] sm:max-h-48 overflow-y-auto pr-1">
           {cart.map((item, index) => (
             <div key={`${item.product_code}-${index}`} className="flex items-center gap-3 bg-[#FAF8F4]/30 p-2 rounded-xl border border-black/5 hover:border-[#402970]/20 transition-all group shadow-xs">
               <img
@@ -566,7 +570,7 @@ export default function CartDrawer({
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
                 placeholder="0771234567"
-                className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:bg-white font-mono placeholder-gray-400 text-[#1A1A1A]"
+                className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 max-sm:py-2.5 text-xs focus:outline-none focus:bg-white font-mono placeholder-gray-400 text-[#1A1A1A]"
               />
             </div>
           </div>
@@ -581,7 +585,7 @@ export default function CartDrawer({
               value={deliveryAddress}
               onChange={(e) => setDeliveryAddress(e.target.value)}
               placeholder="No. 12, Kandy Road, Peradeniya"
-              className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
+              className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 max-sm:py-2.5 text-xs focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
             />
           </div>
 
@@ -622,7 +626,7 @@ export default function CartDrawer({
               value={deliveryInstructions}
               onChange={(e) => { if (e.target.value.length <= 250) setDeliveryInstructions(e.target.value); }}
               placeholder="Gate code, buzzer number, leave at door..."
-              className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
+              className="w-full bg-[#FAF8F4] border border-black/5 rounded-lg px-2.5 py-1.5 max-sm:py-2.5 text-xs focus:outline-none focus:bg-white placeholder-gray-400 text-[#1A1A1A]"
               maxLength={250}
             />
           </div>
@@ -752,11 +756,21 @@ export default function CartDrawer({
       )}
 
       {/* Pay URL reveal drawer with 60-min countdown timer + auto-renew button (Tier 1 core!) */}
-      {orderResult && (
+      {(isOrdering || orderResult || orderError) && (
         <OrderConfirmationCard
-          order={orderResult}
+          order={orderResult ?? {
+            order_ref: '',
+            order_id: '',
+            pay_url: '',
+            total_lkr: 0,
+            expires_at: new Date().toISOString(),
+          }}
           cart={cart}
           currency={currency}
+          lang={lang}
+          isLoading={isOrdering && !orderResult}
+          errorMessage={orderError}
+          onRetry={onClearOrderError}
           onRenew={onRenewOrder}
           onShare={triggerShare}
           deliveryMeta={orderIntent ? {

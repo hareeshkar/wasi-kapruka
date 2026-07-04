@@ -9,6 +9,7 @@ import { Send, ImagePlus, Play, Pause } from 'lucide-react';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
 import ProductCard from './ProductCard';
 import OrderConfirmationCard from './OrderConfirmationCard';
+import OrderTrackingCard from './OrderTrackingCard';
 import ProductComparisonCard from './ProductComparisonCard';
 import CategoryExplorer from './CategoryExplorer';
 import WasiRobotAvatar from './WasiRobotAvatar';
@@ -41,6 +42,8 @@ interface ChatSectionProps {
   onViewDetails?: (productCode: string) => void;
   onQuickReply: (text: string) => void;
   cartSize?: number;
+  /** Mobile only: notify parent when the composer gains/loses focus, so the bottom tab bar can tuck away while typing */
+  onComposerFocusChange?: (focused: boolean) => void;
 }
 
 type ChatPhase = 'discovery' | 'browsing' | 'cart' | 'postorder';
@@ -93,9 +96,10 @@ const isProgressMessage = (content: string): boolean => {
 // ── Component ───────────────────────────────────────────────────────────────
 export default function ChatSection({
   messages, isStreaming, onSendMessage, onSendVoice, onRetryMessage, onAddMessage, onUpdateMessage,
-  onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0,
+  onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0, onComposerFocusChange,
 }: ChatSectionProps) {
   const [inputText, setInputText] = useState('');
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [showScrollFab, setShowScrollFab] = useState(false);
@@ -609,9 +613,8 @@ export default function ChatSection({
 
                       {/* Tracking result */}
                       {msg.tracking_result && (
-                        <div className="mt-2 glass-bubble rounded-xl p-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-violet/50 mb-2">Tracking</p>
-                          <pre className="text-[12px] text-ink-muted font-mono whitespace-pre-wrap">{JSON.stringify(msg.tracking_result, null, 2)}</pre>
+                        <div className="mt-2">
+                          <OrderTrackingCard tracking={msg.tracking_result} lang={lang} />
                         </div>
                       )}
 
@@ -649,7 +652,7 @@ export default function ChatSection({
       <ScrollToBottom visible={showScrollFab} onClick={scrollToBottom} />
 
       {/* Footer: gradient veil + quick replies + composer */}
-      <div className="flex-shrink-0 relative" style={{ background: 'linear-gradient(to top, #FAFAF8 80%, transparent)', paddingTop: 20 }}>
+      <div className={`chat-composer-footer flex-shrink-0 relative ${isComposerFocused ? 'is-composer-focused' : ''}`} style={{ background: 'linear-gradient(to top, #FAFAF8 80%, transparent)', paddingTop: 20 }}>
         <div className="max-w-2xl mx-auto px-4">
 
           {/* Quick replies */}
@@ -744,6 +747,8 @@ export default function ChatSection({
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onFocus={() => { setIsComposerFocused(true); onComposerFocusChange?.(true); }}
+                onBlur={() => { setIsComposerFocused(false); onComposerFocusChange?.(false); }}
                 disabled={isStreaming}
                 aria-label="Ask Wasi — type your gift request"
                 role="textbox"

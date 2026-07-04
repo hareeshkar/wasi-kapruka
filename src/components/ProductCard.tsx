@@ -131,7 +131,7 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
           }}
         />
 
-        {/* Top badges */}
+        {/* Top badges — category left, sale + price stacked right so they never collide */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-start justify-between gap-1 z-10">
           <span
             className="text-[8px] font-semibold font-mono uppercase tracking-wider px-2 py-0.5 rounded-full"
@@ -146,23 +146,23 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
             {product.category}
           </span>
 
-          {hasSale && (
-            <span className="text-[8px] font-bold bg-error text-white px-1.5 py-0.5 rounded-full">
-              SALE
-            </span>
-          )}
-        </div>
-
-        {/* Price badge — top right */}
-        <div
-          className="absolute top-2.5 right-2.5 z-10 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md"
-          style={{
-            background: '#ffffff',
-            color: '#1E0E45',
-            boxShadow: '0 2px 6px rgba(64,41,112,0.18)',
-          }}
-        >
-           {formatPrice(price, currency)}
+          <div className="flex flex-col items-end gap-1">
+            {hasSale && (
+              <span className="text-[8px] font-bold bg-error text-white px-1.5 py-0.5 rounded-full">
+                SALE
+              </span>
+            )}
+            <div
+              className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md"
+              style={{
+                background: '#ffffff',
+                color: '#1E0E45',
+                boxShadow: '0 2px 6px rgba(64,41,112,0.18)',
+              }}
+            >
+              {formatPrice(price, currency)}
+            </div>
+          </div>
         </div>
 
         {/* Bottom overlay — name + CTAs */}
@@ -219,7 +219,7 @@ export default function ProductCard({ product, onAddToBundle, onViewDetails, lan
     <div
       className={`card-spring flex flex-col bg-white overflow-hidden flex-shrink-0 animate-fade-in select-none ${accentClass}`}
       style={{
-        width: 230,
+        width: 'min(230px, 42vw)',
         borderRadius: 14,
         boxShadow: 'var(--shadow-card)',
         border: '1px solid rgba(64,41,112,0.06)',
