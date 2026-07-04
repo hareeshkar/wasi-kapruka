@@ -1,5 +1,6 @@
-import React, { useId } from 'react';
+import React, { useId, useState, useEffect, useRef, useCallback } from 'react';
 import WasiRobotAvatar from '../WasiRobotAvatar';
+import WasiRobot from '../WasiRobot';
 import type { TourLang, TourStepId } from './tourSteps';
 import './tourViz.css';
 
@@ -485,6 +486,37 @@ function DeliverVisualizer({
 function CheckoutVisualizer() {
   const uid = useId().replace(/:/g, '');
   const ticks = Array.from({ length: 60 }, (_, i) => i);
+  const totalSeconds = 58 * 60 + 42;
+
+  // Timer text — simple setInterval
+  const [displayTime, setDisplayTime] = useState(totalSeconds);
+  useEffect(() => {
+    const id = setInterval(() => setDisplayTime((t) => Math.max(0, t - 1)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const mins = Math.floor(displayTime / 60);
+  const secs = displayTime % 60;
+  const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+
+  // Ring arc — smooth requestAnimationFrame, faster speed
+  const startRef = useRef(performance.now());
+  const arcSpeed = 120;
+  const [arcFrac, setArcFrac] = useState(1);
+  useEffect(() => {
+    let raf: number;
+    const tick = () => {
+      const realElapsed = (performance.now() - startRef.current) / 1000;
+      const frac = Math.max(0, 1 - (realElapsed * arcSpeed) / totalSeconds);
+      setArcFrac(frac);
+      if (frac > 0) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const circumference = 2 * Math.PI * 98;
+  const arcVisible = Math.round(circumference * arcFrac);
+  const arcGap = circumference - arcVisible;
   return (
     <VisualFrame>
       <defs>
@@ -530,7 +562,7 @@ function CheckoutVisualizer() {
         strokeWidth="4"
         fill="none"
         strokeLinecap="round"
-        strokeDasharray="431 185"
+        strokeDasharray={`${arcVisible} ${arcGap}`}
         transform="rotate(-90 180 192)"
         className="tviz-arc"
       />
@@ -545,7 +577,7 @@ function CheckoutVisualizer() {
         className="tviz-serif"
         style={{ fontVariantNumeric: 'tabular-nums' }}
       >
-        58:42
+        {timeStr}
       </text>
       <text x="180" y="234" fill={P.inkMuted} fontSize="9.5" textAnchor="middle" className="tviz-sans">minutes remaining</text>
 
@@ -568,13 +600,13 @@ function TrackVisualizer() {
   const uid = useId().replace(/:/g, '');
 
   const THREAD =
-    'M 60 110 C 180 60, 300 120, 240 170 C 190 208, 90 210, 96 258 C 100 292, 200 288, 296 268';
+    'M 70 90 C 160 50, 280 100, 230 160 C 180 210, 100 220, 110 260 C 118 290, 200 290, 240 270';
 
   const knots = [
-    { x: 60, y: 110, title: 'Wrapped', sub: 'Gifting studio, Colombo', labelX: 46, labelY: 134, anchor: 'start' as const, done: true },
-    { x: 240, y: 170, title: 'Picked up', sub: 'Kapruka Express', labelX: 256, labelY: 188, anchor: 'start' as const, done: true },
-    { x: 96, y: 258, title: 'On the way', sub: 'Near Kandy', labelX: 28, labelY: 228, anchor: 'start' as const, done: false },
-    { x: 296, y: 268, title: 'Your door', sub: '', labelX: 296, labelY: 296, anchor: 'middle' as const, done: false },
+    { x: 70, y: 90, title: 'Wrapped', sub: 'Colombo', labelX: 26, labelY: 82, anchor: 'start' as const, done: true },
+    { x: 230, y: 160, title: 'Picked up', sub: 'Kapruka Express', labelX: 248, labelY: 156, anchor: 'start' as const, done: true },
+    { x: 110, y: 260, title: 'On the way', sub: 'Near Kandy', labelX: 58, labelY: 276, anchor: 'start' as const, done: true },
+    { x: 240, y: 270, title: 'Your door', sub: '', labelX: 240, labelY: 308, anchor: 'middle' as const, done: false },
   ];
 
   return (
@@ -589,7 +621,7 @@ function TrackVisualizer() {
       {/* The journey still to come — loose, dashed */}
       <path d={THREAD} fill="none" stroke={P.strokeMid} strokeWidth="1.25" strokeDasharray="3 6" strokeLinecap="round" />
 
-      {/* The journey so far — the thread pulls taut in gold (drawn to ~70%) */}
+      {/* The journey so far — the thread pulls taut in gold (drawn to 100%) */}
       <path
         d={THREAD}
         fill="none"
@@ -597,28 +629,35 @@ function TrackVisualizer() {
         strokeWidth="2.5"
         strokeLinecap="round"
         pathLength="100"
-        strokeDasharray="70 100"
-        strokeDashoffset="70"
+        strokeDasharray="100 100"
+        strokeDashoffset="100"
         className="tviz-fill"
-        style={{ '--tviz-fill-len': 70 } as React.CSSProperties}
+        style={{ '--tviz-fill-len': 100 } as React.CSSProperties}
       />
 
       {/* Milestone knots */}
       {knots.map(({ x, y, title, sub, labelX, labelY, anchor, done }, i) => (
         <g key={title} className="tviz-pop" style={{ animationDelay: `${i * 0.14}s` }}>
-          {i === 2 ? (
-            /* The parcel, mid-journey */
-            <g transform={`translate(${x}, ${y})`} className="tviz-bob">
-              <circle r="13" fill={P.goldLight} stroke={P.gold} strokeWidth="1.25" />
-              <rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill={P.gold} />
-              <line x1="0" y1="-4.5" x2="0" y2="4.5" stroke={P.paper} strokeWidth="1" />
-              <line x1="-4.5" y1="0" x2="4.5" y2="0" stroke={P.paper} strokeWidth="1" />
-            </g>
-          ) : i === 3 ? (
-            /* Home — a small doorway */
+          {i === 3 ? (
+            /* The parcel, arrived at the door — compact door icon */
             <g transform={`translate(${x}, ${y})`}>
-              <path d="M-9 8 V-4 Q0 -12 9 -4 V8 Z" fill={P.paper} stroke={P.violetMid} strokeWidth="1.25" strokeLinejoin="round" />
-              <circle cx="3.5" cy="1" r="1" fill={P.gold} />
+              {/* Doorstep */}
+              <rect x="-14" y="6" width="28" height="4" rx="1" fill={P.violetLight} stroke={P.violetMid} strokeWidth="0.8" />
+              {/* Door frame */}
+              <rect x="-11" y="-16" width="22" height="22" rx="1.5" fill={P.paper} stroke={P.violetMid} strokeWidth="1.5" />
+              {/* Door body */}
+              <rect x="-8" y="-13" width="16" height="19" rx="1" fill={P.violetLight} stroke={P.violetMid} strokeWidth="1" />
+              {/* Upper panel */}
+              <rect x="-6" y="-11" width="12" height="7" rx="0.75" fill="none" stroke={P.violetSoft} strokeWidth="0.75" />
+              {/* Lower panel */}
+              <rect x="-6" y="-1" width="12" height="7" rx="0.75" fill="none" stroke={P.violetSoft} strokeWidth="0.75" />
+              {/* Doorknob */}
+              <circle cx="5" cy="0" r="1.8" fill={P.gold} />
+              {/* Parcel */}
+              <circle r="10" fill={P.goldLight} stroke={P.gold} strokeWidth="1.25" cy="-26" />
+              <rect x="-3.5" y="-29.5" width="7" height="7" rx="1" fill={P.gold} />
+              <line x1="0" y1="-29.5" x2="0" y2="-22.5" stroke={P.paper} strokeWidth="0.8" />
+              <line x1="-3.5" y1="-26" x2="3.5" y2="-26" stroke={P.paper} strokeWidth="0.8" />
             </g>
           ) : (
             <g transform={`translate(${x}, ${y})`}>
@@ -640,27 +679,31 @@ function TrackVisualizer() {
       ))}
 
       {/* The promise, in the display serif */}
-      <text x="180" y="332" fill={P.violetDeep} fontSize="17" fontWeight="600" fontStyle="italic" textAnchor="middle" className="tviz-serif">
-        Arriving today, by 6 PM
+      <text x="180" y="340" fill={P.violetDeep} fontSize="15" fontWeight="600" fontStyle="italic" textAnchor="middle" className="tviz-serif">
+        Arriving today
       </text>
     </VisualFrame>
   );
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Scene 7 — Remember: an open gift box; the details you mention drift in
-   as keepsakes, written in Wasi's hand.
+   Scene 7 — Remember: the 3D WasiRobot receives floating keepsake notes
+   that drift into it as it blinks.
    ─────────────────────────────────────────────────────────────────────── */
 function RememberVisualizer() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const robotCx = 180, robotCy = 230;
+
   const notes = [
-    { text: 'Amma loves lilies', x: 92, y: 92, delay: '0s' },
-    { text: 'Birthday · Aug 12', x: 246, y: 78, delay: '0.5s' },
-    { text: '42 Lake Rd, Kandy', x: 260, y: 148, delay: '0.25s' },
+    { text: 'Name Hareeshkar', x: 90, y: 50, delay: '0s' },
+    { text: 'Birthday · Aug 4', x: 260, y: 50, delay: '0.5s' },
+    { text: '42 Lake Rd, Kandy', x: 260, y: 120, delay: '0.25s' },
+    { text: 'Amma loves lilies', x: 90, y: 120, delay: '0.75s' },
   ];
 
   return (
     <VisualFrame label="Wasi keeps the details, you keep chatting">
-      {/* Handwritten keepsakes drifting toward the box */}
+      {/* Handwritten keepsakes drifting toward the robot */}
       {notes.map((n) => (
         <g key={n.text}>
           <g className="tviz-float" style={{ animationDelay: n.delay }}>
@@ -669,41 +712,22 @@ function RememberVisualizer() {
             </text>
           </g>
           <path
-            d={`M ${n.x} ${n.y + 8} Q ${(n.x + 180) / 2} ${(n.y + 210) / 2 + 16} 180 208`}
+            d={`M ${n.x} ${n.y + 8} Q ${(n.x + robotCx) / 2} ${(n.y + robotCy) / 2 + 20} ${robotCx} ${robotCy - 30}`}
             fill="none"
             stroke={P.strokeMid}
             strokeWidth="0.9"
             strokeDasharray="2 5"
           />
           <circle r="2.5" fill={P.goldBright}>
-            <animateMotion dur="2.8s" repeatCount="indefinite" path={`M ${n.x} ${n.y + 8} Q ${(n.x + 180) / 2} ${(n.y + 210) / 2 + 16} 180 208`} />
+            <animateMotion dur="2.8s" repeatCount="indefinite" path={`M ${n.x} ${n.y + 8} Q ${(n.x + robotCx) / 2} ${(n.y + robotCy) / 2 + 20} ${robotCx} ${robotCy - 30}`} />
           </circle>
         </g>
       ))}
 
-      {/* The gift box that keeps them */}
-      <g>
-        {/* Lid, tilted open */}
-        <g transform="rotate(-10 128 208)">
-          <rect x="116" y="196" width="128" height="18" rx="4" fill={P.paper} stroke={P.violetMid} strokeWidth="1.25" />
-          <rect x="172" y="196" width="10" height="18" fill={P.gold} opacity="0.9" />
-        </g>
-        {/* Bow */}
-        <g transform="translate(170, 186) rotate(-10)">
-          <path d="M0 0 C-12 -12, -22 -2, -8 4 Z" fill="none" stroke={P.gold} strokeWidth="1.5" strokeLinejoin="round" />
-          <path d="M0 0 C12 -12, 22 -2, 8 4 Z" fill="none" stroke={P.gold} strokeWidth="1.5" strokeLinejoin="round" />
-          <circle cx="0" cy="1" r="2.5" fill={P.gold} />
-        </g>
-        {/* Body */}
-        <rect x="126" y="216" width="108" height="82" rx="6" fill={P.violetLight} stroke={P.violetMid} strokeWidth="1.25" />
-        <rect x="174" y="216" width="12" height="82" fill={P.gold} opacity="0.9" />
-        <rect x="126" y="216" width="108" height="82" rx="6" fill="none" stroke={P.violetMid} strokeWidth="1.25" />
-      </g>
-
-      {/* Wasi minds the box */}
-      <foreignObject x="242" y="240" width="52" height="52">
-        <div className="flex items-center justify-center w-full h-full tviz-float" style={{ animationDelay: '0.3s' }}>
-          <WasiRobotAvatar size={46} />
+      {/* 3D WasiRobot — blinks, breathes, idle animation */}
+      <foreignObject x="110" y="145" width="140" height="180">
+        <div style={{ width: 140, height: 180, overflow: 'hidden' }}>
+          <WasiRobot inputRef={inputRef} width={140} height={180} />
         </div>
       </foreignObject>
     </VisualFrame>

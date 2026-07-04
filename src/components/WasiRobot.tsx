@@ -4,6 +4,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 interface WasiRobotProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
+  width?: number;
+  height?: number;
 }
 
 // ── Palette — warm violet body, gold soul, cream background ──────────────
@@ -61,7 +63,7 @@ const mat = (color: number, opts: Partial<THREE.MeshStandardMaterialParameters> 
   new THREE.MeshStandardMaterial({ color, roughness: 0.30, metalness: 0.50, ...opts });
 
 // ═════════════════════════════════════════════════════════════════════════
-export default function WasiRobot({ inputRef }: WasiRobotProps) {
+export default function WasiRobot({ inputRef, width = 240, height = 280 }: WasiRobotProps) {
   const box = useRef<HTMLDivElement>(null);
 
   // Three.js refs
@@ -345,7 +347,7 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
     scene.add(g);
     robotRef.current = g;
     headRef.current = head;
-  }, []);
+  }, [width, height]);
 
   // ── Three.js lifecycle ─────────────────────────────────────────────────
   useEffect(() => {
@@ -353,10 +355,10 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
     if (!el) return;
     S.current.dead = false;
 
-    const W = 240, H = 280;
+    const W = width, H = height;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xFAFAF8);
+    scene.background = null;
     sceneRef.current = scene;
 
     const cam = new THREE.PerspectiveCamera(38, W / H, 0.1, 50);
@@ -582,7 +584,7 @@ export default function WasiRobot({ inputRef }: WasiRobotProps) {
 
   return (
     <div ref={box} className="mb-1"
-      style={{ width: 200, height: 220, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+      style={{ width, height, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
     />
   );
 }

@@ -278,7 +278,7 @@ export default function EmptyStatePlaceholder({
       <div className="relative z-10 flex flex-col items-center w-full max-w-[820px] px-6 animate-fadeInUp">
 
         {/* 3D Wasi Robot — interactive, tracks mouse + text caret */}
-        <WasiRobot inputRef={inputRef} />
+        <WasiRobot inputRef={inputRef} width={240} height={280} />
 
         {/* Greeting */}
         <div className="text-center mb-4 px-4 py-2">
@@ -295,7 +295,7 @@ export default function EmptyStatePlaceholder({
             {displayName ? (
               <>{t('hiName', lang)} <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#402970', fontStyle: 'italic' }}>{displayName}</span>, {t('imWasi', lang)}</>
             ) : (
-              <>{t('hiName', lang)}, <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#402970', fontStyle: 'italic' }}>Wasi</span></>
+              <>{t('hiName', lang)}, <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#402970', fontStyle: 'italic' }}>{t('imWasi', lang)}</span></>
             )}
           </h1>
 
