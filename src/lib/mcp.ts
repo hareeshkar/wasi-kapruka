@@ -381,6 +381,41 @@ const circuitBreaker = {
   },
 };
 
+// ── Raw MCP HTTP Call ────────────────────────────────────────────────────────
+// Performs a single JSON-RPC request to the MCP endpoint and returns the parsed
+// response payload. Used by the category-filter fallback for kapruka_search_products
+// when the primary call returns empty results due to the broken category filter.
+async function mcpRawHttpCall(toolName: string, params: Record<string, any>): Promise<any> {
+  const sessionId = await getOrEstablishSession(false);
+  const res = await fetch(MCP_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      'mcp-session-id': sessionId,
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 WasiConcierge/1.0'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name: toolName, arguments: { params } },
+      id: Math.floor(Math.random() * 1000 + 1)
+    }),
+  });
+  if (!res.ok) throw new Error(`MCP raw call HTTP ${res.status}`);
+  const text = await res.text();
+  let jsonPayload: any;
+  if (text.includes('data:')) {
+    const dataParts = text.split('\n')
+      .filter(l => l.trim().startsWith('data:'))
+      .map(l => l.trim().substring(5).trim());
+    jsonPayload = dataParts.length > 0 ? JSON.parse(dataParts.join('\n')) : JSON.parse(text);
+  } else {
+    jsonPayload = JSON.parse(text);
+  }
+  return jsonPayload?.result;
+}
+
 // ── Response Shape Validator ─────────────────────────────────────────────────
 // Validates that MCP responses have the expected shape based on real API responses.
 // Returns null if valid, or an error message if invalid.
@@ -717,6 +752,44 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
           if (attempts >= 2) return simulateMcpTool(toolName, args);
           throw new Error(textBlock);
         }
+
+        // ── "No products found" plain text handling ──────────────────────────
+        // When the MCP's category filter is broken (or genuinely no results), the
+        // response is plain text like "No products found for 'X' in category 'Y'".
+        // Detect this and treat as empty results — then the category fallback below
+        // can retry without the broken filter.
+        const isNoResults = typeof textBlock === 'string' &&
+          textBlock.startsWith('No products found');
+        if (isNoResults && toolName === 'kapruka_search_products' && sanitizedParams?.category) {
+          // Category filter produced zero results — retry without it
+          console.warn(`[MCP] Category fallback: '${sanitizedParams.q}' + category='${sanitizedParams.category}' → 0 results. Retrying without category filter.`);
+          circuitBreaker.recordSuccess();
+          try {
+            const fallbackParams = { ...sanitizedParams };
+            delete fallbackParams.category;
+            const fallbackResult = await mcpRawHttpCall(toolName, fallbackParams);
+            const fallbackText = fallbackResult?.content?.find((c: any) => c.type === 'text')?.text;
+            if (fallbackText && !fallbackText.startsWith('Error') && !fallbackText.startsWith('No products')) {
+              const fallbackParsed = JSON.parse(fallbackText);
+              const items = Array.isArray(fallbackParsed) ? fallbackParsed
+                : Array.isArray(fallbackParsed?.results) ? fallbackParsed.results : [];
+              if (items.length > 0) {
+                const normalized = normalizeLiveResults(toolName, items, sanitizedParams?.currency);
+                return { results: normalized, next_cursor: fallbackParsed?.next_cursor ?? null, _category_fallback: true };
+              }
+            }
+          } catch (fbErr) {
+            console.warn(`[MCP] Category fallback call failed: ${(fbErr as any).message}`);
+          }
+          // Fallback also returned nothing — return empty results (not an error)
+          return { results: [], next_cursor: null };
+        }
+        if (isNoResults) {
+          // Genuine "no results" or category not in params — return empty
+          circuitBreaker.recordSuccess();
+          return { results: [], next_cursor: null };
+        }
+
         try {
           const parsed = JSON.parse(textBlock);
           // Validate response shape against known MCP wire format
@@ -728,16 +801,41 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
           }
           circuitBreaker.recordSuccess();
           // Normalize live MCP shapes to our internal format
-          if (Array.isArray(parsed)) return normalizeLiveResults(toolName, parsed);
+          const buildSearchResult = (items: any[], nextCursor?: string | null) => {
+            const normalized = normalizeLiveResults(toolName, items, sanitizedParams?.currency);
+            return { results: normalized, next_cursor: nextCursor ?? null };
+          };
+          if (Array.isArray(parsed)) {
+            return toolName === 'kapruka_search_products' ? buildSearchResult(parsed) : parsed;
+          }
           if (parsed && typeof parsed === 'object') {
-            // kapruka_search_products returns { results: [...], next_cursor, ... }.
-            // PRESERVE next_cursor — dropping it broke "show me more" pagination
-            // (the LLM could never see the cursor token to pass back).
             if (Array.isArray(parsed.results)) {
-              const normalized = normalizeLiveResults(toolName, parsed.results, sanitizedParams?.currency);
+              // ── Category-filter fallback for JSON responses ───────────────
+              // Same as above but for when MCP returns valid JSON with empty results.
+              if (toolName === 'kapruka_search_products' && sanitizedParams?.category && parsed.results.length === 0) {
+                console.warn(`[MCP] Category fallback (JSON): '${sanitizedParams.q}' + category='${sanitizedParams.category}' → 0 results. Retrying without category filter.`);
+                try {
+                  const fallbackParams = { ...sanitizedParams };
+                  delete fallbackParams.category;
+                  const fallbackResult = await mcpRawHttpCall(toolName, fallbackParams);
+                  const fbText = fallbackResult?.content?.find((c: any) => c.type === 'text')?.text;
+                  if (fbText && !fbText.startsWith('Error') && !fbText.startsWith('No products')) {
+                    const fbParsed = JSON.parse(fbText);
+                    const items = Array.isArray(fbParsed) ? fbParsed
+                      : Array.isArray(fbParsed?.results) ? fbParsed.results : [];
+                    if (items.length > 0) {
+                      const normalized = normalizeLiveResults(toolName, items, sanitizedParams?.currency);
+                      return { results: normalized, next_cursor: fbParsed?.next_cursor ?? null, _category_fallback: true };
+                    }
+                  }
+                } catch (fbErr) {
+                  console.warn(`[MCP] Category fallback call failed: ${(fbErr as any).message}`);
+                }
+                return { results: [], next_cursor: null };
+              }
               return toolName === 'kapruka_search_products'
-                ? { results: normalized, next_cursor: parsed.next_cursor ?? null }
-                : normalized;
+                ? buildSearchResult(parsed.results, parsed.next_cursor)
+                : normalizeLiveResults(toolName, parsed.results, sanitizedParams?.currency);
             }
             if (Array.isArray(parsed.products)) return normalizeLiveResults(toolName, parsed.products, sanitizedParams?.currency);
             if (Array.isArray(parsed.cities)) return parsed.cities;
