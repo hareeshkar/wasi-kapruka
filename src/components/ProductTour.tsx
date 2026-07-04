@@ -340,7 +340,7 @@ export default function ProductTour({
                               onClick={handleTryExample}
                               className="text-[10px] font-mono text-violet-soft hover:text-violet transition-colors"
                             >
-                              Send to chat →
+                              {ui.sendToChat} →
                             </button>
                           </div>
                         )}
