@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Category } from '../types';
+import { getCategoryEmoji } from './categoryEmoji';
 
 interface CategoryExplorerProps {
   categories: Category[];
@@ -38,32 +39,7 @@ const LOCALE = {
   },
 };
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  cakes: '🎂', flowers: '💐', chocolates: '🍫', hampers: '🎁', combopack: '📦',
-  grocery: '🛒', electronic: '📱', fashion: '👗', jewellery: '💍', cosmetics: '💄',
-  books: '📚', kidstoys: '🧸', softtoy: '🧸', sports: '⚽', bicycle: '🚲',
-  automobile: '🚗', babyitems: '🍼', greetingcards: '💌', giftcert: '🎫',
-  liquor: '🍷', perfume: '🧴', pet: '🐾', pharmacy: '💊',
-  party: '🎈', vegetables: '🥬', fruits: '🍎', household: '🏠', curd: '🥛',
-  ayurvedic: '🌿', schoolpride: '🎓', services: '🔧', pirikara: '🙏',
-  personalizedgifts: '🎨', food: '🍽️', clothing: '👕', rice: '🍚',
-  seafood: '🦐', frozenfood: '🧊', beverages: '🥤', dairyproducts: '🧀',
-  spicesandseasoning: '🌶️', snacksandsweets: '🍪', pastaandnoodles: '🍝',
-  bakery: '🥐', confectioneryandbiscuits: '🍫', babyfoodandnutrition: '🍼',
-  cutvegetables: '🥬', dehydratedvegetables: '🥬', exoticvegetables: '🥬',
-  freshvegetables: '🥬', herbs: '🌿', leafyvegetables: '🥬', organicvegetables: '🥬',
-  packagedvegetables: '🥬', cannedfood: '🥫', cleansers: '🧹', condiments: '🧂',
-  dessert: '🍮', eggsandoil: '🥚', flour: '🌾',
-  juice: '🧃', nonalcoholicwine: '🍷',
-  organic: '🌿', pestcontrol: '🐛',
-  specialoffers: '🏷️', specialtyfoods: '🍽️',
-  tobacco: '🚬', wellness: '💊',
-};
-
-function getEmoji(name: string): string {
-  const key = name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z]/g, '');
-  return CATEGORY_EMOJI[key] || '📦';
-}
+const getEmoji = getCategoryEmoji;
 
 export default function CategoryExplorer({
   categories,
@@ -123,7 +99,7 @@ export default function CategoryExplorer({
             filtered.map((sub, i) => (
               <button
                 key={sub.name}
-                onClick={() => onCategoryClick(`show me ${sub.name}`)}
+                onClick={() => onCategoryClick(`show me ${sub.name} from the ${parentCategory} category`)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200/50 transition-all cursor-pointer active:scale-[0.98] group"
                 style={{ animationDelay: `${i * 25}ms` }}
               >

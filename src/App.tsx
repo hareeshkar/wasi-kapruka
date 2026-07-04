@@ -336,6 +336,34 @@ export default function App() {
   };
 
   /**
+   * Serializes a message for the LLM history payload. UI-only messages
+   * (category grids, product cards) have empty text content — without these
+   * annotations the model can't see what's already on screen, so it re-calls
+   * the same display tools (e.g. wasi_browse_subcategories) every turn.
+   * Single source of truth for ALL /api/chat history payloads.
+   */
+  const toHistoryEntry = (m: Message) => ({
+    role: m.role,
+    content: m.content
+      + (m.products?.length ?
+        '\n[Searched products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
+      + (m.search_cursor ?
+        `\n[Pagination: more "${m.search_cursor.q}" results available — pass cursor="${m.search_cursor.cursor}" to kapruka_search_products if the user asks for more of the same]` : '')
+      + (m.categories?.length ?
+        `\n[UI: ${m.parentCategory ? `subcategory grid for "${m.parentCategory}"` : 'category grid'} (${m.categories.length} entries) already shown to the user — do NOT call wasi_show_categories or wasi_browse_subcategories for it again; search products directly instead]` : '')
+      + (m.product_detail ?
+        `\n[UI: full detail card for "${m.product_detail.name}" (code=${m.product_detail.product_code}) already shown — do NOT call wasi_show_product_detail for it again]` : '')
+      + (m.compare_products?.length ?
+        `\n[UI: comparison card already shown for: ${m.compare_products.map(p => `${p.name} (code=${p.product_code})`).join(' vs ')} — do NOT call wasi_compare_products for the same set again]` : '')
+      + (m.city_suggest?.length ?
+        `\n[UI: city suggestions shown: ${m.city_suggest.map(c => c.name).join(', ')}]` : '')
+      + (m.order_created ?
+        `\n[UI: order confirmation card shown — order_ref=${m.order_created.order_ref}, total Rs.${m.order_created.total_lkr}]` : '')
+      + (m.tracking_result ?
+        `\n[UI: order tracking card shown — order ${m.tracking_result.order_number ?? ''}, status: ${m.tracking_result.status_display ?? m.tracking_result.status ?? 'unknown'} — do NOT call kapruka_track_order for it again unless the user asks for an update]` : ''),
+  });
+
+  /**
    * Single source of truth for processing tool calls from the LLM response.
    * Returns a state bag — handlers apply side effects (cart, routing, etc.)
    * by executing the actions array. This keeps tool normalization deterministic
@@ -356,6 +384,19 @@ export default function App() {
     let shouldClearCart = false;
     let shouldOrderNow = false;
     const actions: ToolAction[] = [];
+
+    // The adapter dedupes identical calls within one tool round, but the model
+    // can stutter the same call across rounds of the same turn. An identical
+    // action twice in one response is never intentional (quantity changes go
+    // through wasi_update_cart_quantity) — drop repeats so e.g. a doubled
+    // wasi_add_to_cart doesn't double the quantity.
+    const actionSeen = new Set<string>();
+    const pushAction = (a: ToolAction) => {
+      const key = JSON.stringify(a);
+      if (actionSeen.has(key)) return;
+      actionSeen.add(key);
+      actions.push(a);
+    };
 
     for (const tc of toolCalls) {
       // ── T1: kapruka_search_products ──────────────────────────────────────
@@ -415,7 +456,7 @@ export default function App() {
       if (tc.toolName === 'wasi_add_to_cart' && tc.result) {
         const p = tc.result;
         if (opts.budget > 0 && p.price_lkr > opts.budget) continue;
-        actions.push({
+        pushAction({
           type: 'add_to_cart',
           product: {
             product_code: p.product_id, name: p.product_name,
@@ -430,17 +471,17 @@ export default function App() {
 
       // ── V3: wasi_remove_from_cart ────────────────────────────────────────
       if (tc.toolName === 'wasi_remove_from_cart' && tc.result?.product_id) {
-        actions.push({ type: 'remove_from_cart', productId: tc.result.product_id });
+        pushAction({ type: 'remove_from_cart', productId: tc.result.product_id });
       }
 
       // ── V4: wasi_update_cart_quantity ─────────────────────────────────────
       if (tc.toolName === 'wasi_update_cart_quantity' && tc.result?.product_id) {
-        actions.push({ type: 'update_cart', productId: tc.result.product_id, quantity: tc.result.quantity ?? 1 });
+        pushAction({ type: 'update_cart', productId: tc.result.product_id, quantity: tc.result.quantity ?? 1 });
       }
 
       // ── V5: wasi_show_progress ───────────────────────────────────────────
       if (tc.toolName === 'wasi_show_progress' && tc.result) {
-        actions.push({ type: 'show_progress', step: tc.result.step, message: tc.result.message });
+        pushAction({ type: 'show_progress', step: tc.result.step, message: tc.result.message });
       }
 
       // ── V6: wasi_order_now ───────────────────────────────────────────────
@@ -483,6 +524,7 @@ export default function App() {
         'wasi_update_cart_quantity', 'wasi_show_progress', 'wasi_order_now',
         'wasi_show_product_detail', 'wasi_compare_products', 'wasi_show_categories',
         'wasi_browse_subcategories', 'wasi_new_order', 'wasi_get_form_state',
+        'wasi_get_cart',
       ];
       if (!KNOWN_TOOLS.includes(tc.toolName)) {
         console.warn(`[processToolCalls] Unrecognized tool name: "${tc.toolName}" — result discarded. Possible LLM typo or new tool not yet integrated.`);
@@ -501,8 +543,16 @@ export default function App() {
    * and adds them as additional messages. Shared by all three handlers.
    */
   const processDeferredTools = async (state: ToolCallState) => {
+    // Defense-in-depth against redundant display-tool calls: the history
+    // annotations (toHistoryEntry) tell the model what's already on screen,
+    // but if it re-calls a display tool anyway, skip re-rendering a card that
+    // is already in the recent tail of the conversation. An explicit
+    // "show it again" much later still works.
+    const recentlyShown = (pred: (m: Message) => boolean | undefined) =>
+      messagesRef.current.slice(-10).some(m => !!pred(m));
+
     // wasi_show_product_detail → fetch full details and add inline card
-    if (state.pendingDetailId) {
+    if (state.pendingDetailId && !recentlyShown(m => m.product_detail?.product_code === state.pendingDetailId)) {
       const pid = state.pendingDetailId;
       try {
         const res = await fetch(`/api/products/${pid}`);
@@ -522,7 +572,13 @@ export default function App() {
     }
 
     // wasi_compare_products → fetch each and add comparison card
-    if (state.pendingCompareIds) {
+    const sameCompareSet = (shown?: Product[]) => {
+      if (!shown || !state.pendingCompareIds) return false;
+      const shownIds = new Set(shown.map(p => p.product_code));
+      return state.pendingCompareIds.length === shownIds.size &&
+        state.pendingCompareIds.every(id => shownIds.has(id));
+    };
+    if (state.pendingCompareIds && !recentlyShown(m => sameCompareSet(m.compare_products))) {
       const ids = state.pendingCompareIds;
       try {
         const results = await Promise.allSettled(
@@ -553,7 +609,9 @@ export default function App() {
     }
 
     // wasi_show_categories / wasi_browse_subcategories → add category message
-    if (state.pendingCategories) {
+    if (state.pendingCategories && !recentlyShown(m =>
+      !!m.categories?.length && (m.parentCategory || null) === (state.pendingParentCategory || null)
+    )) {
       const cats = state.pendingCategories;
       void addMessage({
         id: `categories-${Date.now()}`,
@@ -589,7 +647,11 @@ export default function App() {
         case 'update_cart':
           handleUpdateQty(action.productId, action.quantity);
           break;
-        case 'show_progress':
+        case 'show_progress': {
+          // Same-phase progress repeated across turns is model stutter, not
+          // new information — skip if the identical status line is recent.
+          const dup = messagesRef.current.slice(-10).some(m => m.content === `*${action.message}*`);
+          if (dup) break;
           void addMessage({
             id: `progress-${Date.now()}-${action.step}`,
             role: 'assistant' as const,
@@ -597,6 +659,7 @@ export default function App() {
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           });
           break;
+        }
       }
     }
 
@@ -741,14 +804,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: messagesRef.current.slice(-50).map(m => ({
-            role: m.role,
-            content: m.content
-              + (m.products?.length ?
-                '\n[Searched products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
-              + (m.search_cursor ?
-                `\n[Pagination: more "${m.search_cursor.q}" results available — pass cursor="${m.search_cursor.cursor}" to kapruka_search_products if the user asks for more of the same]` : '')
-          })),
+          history: messagesRef.current.slice(-50).map(toHistoryEntry),
           language,
           budget,
           occasion,
@@ -879,14 +935,7 @@ export default function App() {
     // ── STEP 2: Main chat call ─────────────────────────────────────────────────
     // When transcript available → send as text (parity with typed messages).
     // When transcript failed → send raw audio (Gemini hears it natively, fallback).
-    const chatHistory = messagesRef.current.slice(-50).map(m => ({
-      role: m.role,
-      content: m.content
-        + (m.products?.length ?
-          '\n[Searched products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
-        + (m.search_cursor ?
-          `\n[Pagination: more "${m.search_cursor.q}" results available — pass cursor="${m.search_cursor.cursor}" to kapruka_search_products if the user asks for more of the same]` : '')
-    }));
+    const chatHistory = messagesRef.current.slice(-50).map(toHistoryEntry);
 
     try {
       const res = await fetch('/api/chat', {
@@ -981,14 +1030,7 @@ export default function App() {
       setIsStreaming(true);
 
       // Build history from the TRUNCATED messages (not full history)
-      const historyForRetry = truncated.slice(0, -1).map(m => ({
-        role: m.role,
-        content: m.content
-          + (m.products?.length ?
-            '\n[Searched products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
-          + (m.search_cursor ?
-            `\n[Pagination: more "${m.search_cursor.q}" results available — pass cursor="${m.search_cursor.cursor}" to kapruka_search_products if the user asks for more of the same]` : '')
-      }));
+      const historyForRetry = truncated.slice(0, -1).map(toHistoryEntry);
 
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -1111,11 +1153,7 @@ export default function App() {
             variant:     variant ? { id: variant.id, name: variant.name } : null,
             url:         (product as any).url ?? null,
           }, null, 2)}\n\nAcknowledge in ONE warm sentence. Then ask the single most useful tailored question:\n- Cake/Cheesecake → ask what icing text to write on the cake\n- Flowers/Rose/Bouquet → ask if they want a card message included\n- Chocolates/Hamper → suggest one complementary add-on within budget\n- Anything else → ask who the recipient is if not yet known`,
-          history: messagesRef.current.slice(-30).map(m => ({
-            role: m.role,
-            content: m.content + (m.products?.length ?
-              '\n[Products: ' + m.products.map(p => `${p.name} (code=${p.product_code}, Rs.${p.price_lkr})`).join('; ') + ']' : '')
-          })),
+          history: messagesRef.current.slice(-30).map(toHistoryEntry),
           language,
           budget,
           occasion,
@@ -1224,7 +1262,7 @@ export default function App() {
         };
         void addMessage(orderMsg);
       } else {
-        const msg = data.error || 'Kapruka did not return a checkout link. Check delivery details and try again.';
+        const msg = data.message || data.error || 'Kapruka did not return a checkout link. Check delivery details and try again.';
         setOrderError(msg);
         setErrorToast({
           message: msg,
@@ -1724,6 +1762,7 @@ export default function App() {
           onComplete={() => setTourOpen(false)}
           onSignIn={() => setSignInOpen(true)}
           onTryPrompt={(text) => handleSendMessage(text)}
+          onLangChange={setLanguage}
         />
 
         <div className={`flex-1 flex flex-col ${messages.length === 0 ? 'pt-2' : ''}`}>

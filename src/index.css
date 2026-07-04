@@ -179,6 +179,133 @@ html {
   }
 }
 
+/* ── Product tour premium light visuals ────────────────────────────────────── */
+@keyframes tourVisualShine {
+  0%, 100% { opacity: 0; transform: translateX(-40%) skewX(-12deg); }
+  50% { opacity: 0.7; transform: translateX(40%) skewX(-12deg); }
+}
+@keyframes tourOrbitCW {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes tourOrbitCCW {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes tourPulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.06); }
+}
+@keyframes tourFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes tourFlame {
+  0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.95; }
+  25% { transform: scaleY(1.12) scaleX(0.95); opacity: 1; }
+  50% { transform: scaleY(0.92) scaleX(1.04); opacity: 0.85; }
+  75% { transform: scaleY(1.08) scaleX(0.97); opacity: 1; }
+}
+@keyframes tourScanSweep {
+  0%, 100% { transform: translateY(0); opacity: 0.25; }
+  50% { transform: translateY(126px); opacity: 0.9; }
+}
+@keyframes tourWaveBar {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes tourRouteDraw {
+  from { stroke-dashoffset: 320; opacity: 0; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes tourCityPing {
+  0% { opacity: 0.6; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes tourArcSweep {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+@keyframes tourTimelineFill {
+  from { stroke-dasharray: 0 200; }
+  to { stroke-dasharray: 76 200; }
+}
+@keyframes tourStepPop {
+  0% { opacity: 0; transform: scale(0.7); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes tourPopIn {
+  0% { opacity: 0; transform: translateY(6px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tour-visual-shine {
+  background: linear-gradient(105deg, transparent 44%, rgba(255,255,255,0.55) 50%, transparent 56%);
+  animation: tourVisualShine 5s ease-in-out infinite;
+}
+.tour-orbit-cw { animation: tourOrbitCW 38s linear infinite; }
+.tour-orbit-ccw { animation: tourOrbitCCW 52s linear infinite; }
+.tour-core-glow { transform-origin: center; animation: tourPulseGlow 3s ease-in-out infinite; }
+.tour-float { animation: tourFloat 3.4s ease-in-out infinite; }
+.tour-flame { transform-origin: center bottom; animation: tourFlame 1.6s ease-in-out infinite; }
+.tour-scan-sweep { animation: tourScanSweep 3s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.tour-wave-bar { transform-origin: center; animation: tourWaveBar 1.1s ease-in-out infinite; }
+.tour-route-draw { stroke-dasharray: 320; animation: tourRouteDraw 0.9s ease-out both; }
+.tour-city-ping { transform-origin: center; animation: tourCityPing 1.8s ease-out infinite; }
+.tour-arc-sweep { animation: tourArcSweep 2.4s ease-in-out infinite; }
+.tour-timeline-fill { animation: tourTimelineFill 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+.tour-step-pop { transform-origin: center; animation: tourStepPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.tour-pop-in { transform-origin: center; animation: tourPopIn 0.35s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+
+@keyframes tourRouteTrace {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.tour-route-trace { stroke-dasharray: 1; animation: tourRouteTrace 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes tourTruckBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+.tour-truck-bob { animation: tourTruckBob 1.4s ease-in-out infinite; }
+
+@keyframes tourTrackFill {
+  from { stroke-dashoffset: 140; }
+  to   { stroke-dashoffset: 0; }
+}
+.tour-track-fill { stroke-dasharray: 140; animation: tourTrackFill 1s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+
+@keyframes tourCheckPop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.tour-check-pop { transform-origin: center; animation: tourCheckPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-visual-shine,
+  .tour-orbit-cw,
+  .tour-orbit-ccw,
+  .tour-core-glow,
+  .tour-float,
+  .tour-flame,
+  .tour-scan-sweep,
+  .tour-wave-bar,
+  .tour-route-draw,
+  .tour-route-trace,
+  .tour-city-ping,
+  .tour-truck-bob,
+  .tour-arc-sweep,
+  .tour-timeline-fill,
+  .tour-track-fill,
+  .tour-step-pop,
+  .tour-check-pop,
+  .tour-pop-in {
+    animation: none !important;
+  }
+}
+
 /* ── Gift-tag system — a wrapped-gift vocabulary, not generic glow ───────────
    Signature: the foil thread + eyelet from a real Kapruka gift tag, and a
    wax-seal badge for iconography. One solid gold accent, used with restraint. */

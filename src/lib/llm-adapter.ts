@@ -739,7 +739,15 @@ class GeminiAdapter implements LLMAdapter {
       }
     }
 
-    return { reply: response.text ?? 'Done! Check the updated results.', toolCalls: toolCallsLog };
+    // Join text parts ourselves — the SDK's .text getter concatenates multiple
+    // text parts with no separator, fusing words across part boundaries
+    // (e.g. "…didn't bring up any" + "baked beans?" → "anybaked beans?").
+    const textParts = (response.candidates?.[0]?.content?.parts ?? [])
+      .filter((p: any) => typeof p.text === 'string' && !p.thought)
+      .map((p: any) => p.text.trim())
+      .filter(Boolean);
+    const reply = textParts.length ? textParts.join(' ') : (response.text ?? 'Done! Check the updated results.');
+    return { reply, toolCalls: toolCallsLog };
   }
 }
 

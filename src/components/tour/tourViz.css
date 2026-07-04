@@ -1,0 +1,121 @@
+/* ── Tour visualizer scenes — gift-tag atelier system ─────────────────────────
+   Owned by TourVisualizers.tsx (imported there). Violet ink linework on warm
+   paper, one gold foil accent per scene. Light mode only. */
+
+.tviz-serif { font-family: "Fraunces", Georgia, serif; font-optical-sizing: auto; }
+.tviz-mono  { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace; }
+.tviz-sans  { font-family: "Outfit", system-ui, sans-serif; }
+
+/* Frame sheen — one slow, restrained sweep across the paper */
+@keyframes tvizSheen {
+  0%, 100% { opacity: 0; transform: translateX(-45%) skewX(-12deg); }
+  50% { opacity: 0.6; transform: translateX(45%) skewX(-12deg); }
+}
+.tviz-sheen {
+  background: linear-gradient(105deg, transparent 44%, rgba(255, 255, 255, 0.5) 50%, transparent 56%);
+  animation: tvizSheen 6s ease-in-out infinite;
+}
+
+/* Gentle vertical drift for tags and props */
+@keyframes tvizFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.tviz-float { animation: tvizFloat 3.6s ease-in-out infinite; }
+
+/* Soft breathing glow (seal cores, live dots) */
+@keyframes tvizPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.05); }
+}
+.tviz-pulse { transform-origin: center; animation: tvizPulse 3s ease-in-out infinite; }
+
+/* Expanding ping around a selected city / active chip */
+@keyframes tvizPing {
+  0% { opacity: 0.55; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+.tviz-ping { transform-origin: center; animation: tvizPing 1.9s ease-out infinite; }
+
+/* Voice waveform bars */
+@keyframes tvizWave {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+.tviz-wave { transform-origin: center; animation: tvizWave 1.15s ease-in-out infinite; }
+
+/* Typing caret */
+@keyframes tvizCaret {
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+.tviz-caret { animation: tvizCaret 1.1s step-end infinite; }
+
+/* Photo shimmer — a light pass over the snapshot */
+@keyframes tvizShimmer {
+  0%, 100% { transform: translateX(-30px); opacity: 0; }
+  50% { transform: translateX(30px); opacity: 0.7; }
+}
+.tviz-shimmer { animation: tvizShimmer 3.2s ease-in-out infinite; }
+
+/* Route draws itself when a city is chosen (pathLength=1 on the path) */
+@keyframes tvizRoute {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.tviz-route { stroke-dasharray: 1; animation: tvizRoute 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Timeline fill (stroke-dasharray set inline to the segment length) */
+@keyframes tvizFill {
+  from { stroke-dashoffset: var(--tviz-fill-len, 140); }
+  to { stroke-dashoffset: 0; }
+}
+.tviz-fill { animation: tvizFill 1s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+
+/* Staggered pop for timeline steps and chips */
+@keyframes tvizPop {
+  0% { opacity: 0; transform: scale(0.7); }
+  60% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.tviz-pop { transform-origin: center; animation: tvizPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Checkmark stamp-in */
+@keyframes tvizCheck {
+  0% { opacity: 0; transform: scale(0.5); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.tviz-check { transform-origin: center; animation: tvizCheck 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Parcel bob while in transit */
+@keyframes tvizBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.tviz-bob { animation: tvizBob 1.4s ease-in-out infinite; }
+
+/* Dial arc breathing */
+@keyframes tvizArc {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+.tviz-arc { animation: tvizArc 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tviz-sheen,
+  .tviz-float,
+  .tviz-pulse,
+  .tviz-ping,
+  .tviz-wave,
+  .tviz-caret,
+  .tviz-shimmer,
+  .tviz-route,
+  .tviz-fill,
+  .tviz-pop,
+  .tviz-check,
+  .tviz-bob,
+  .tviz-arc {
+    animation: none !important;
+  }
+}

@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-import { callMcpTool } from './src/lib/mcp.js';
+import { callMcpTool, McpBusinessError } from './src/lib/mcp.js';
 import { createClient } from '@supabase/supabase-js';
 import {
   createLLMAdapter,
@@ -14,6 +14,20 @@ import type { LLMAdapter } from './src/lib/llm-adapter.js';
 dotenv.config();
 
 // Sanitize error messages before sending to client — never leak API keys or internals
+/**
+ * Maps an error from callMcpTool to an HTTP response. Domain errors
+ * (product_not_found, city_not_found, …) are the caller's problem — 404/422 —
+ * not a 500 pretending the catalog is down.
+ */
+function sendMcpError(res: any, err: any): void {
+  if (err instanceof McpBusinessError) {
+    const status = err.code.endsWith('_not_found') ? 404 : 422;
+    res.status(status).json({ success: false, error: err.code, message: sanitizeError(err) });
+    return;
+  }
+  res.status(500).json({ success: false, error: sanitizeError(err) });
+}
+
 function sanitizeError(err: any): string {
   const msg = typeof err?.message === 'string' ? err.message : String(err);
   return msg
@@ -321,7 +335,20 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
             and wants to explore it.
    NEVER  : after you already showed subcategories — don't show the grid again
    FLOW   : user asks "what groceries" → wasi_browse_subcategories("Grocery") → show subcategory list
-            user picks subcategory → T1 search for that subcategory
+            user picks subcategory → T1 search for that subcategory (pass category filter, e.g.
+            "Dairy Products from the Grocery category" → q="dairy products", category="Grocery")
+
+  ★ UI ANNOTATIONS IN HISTORY: assistant turns may contain [UI: ...] notes describing cards
+    already on the user's screen (category grids, product detail, comparisons, order cards).
+    These are ground truth — NEVER re-call a display tool (wasi_show_categories,
+    wasi_browse_subcategories, wasi_show_product_detail, wasi_compare_products) for
+    something a [UI: ...] note says is already shown, unless the user explicitly asks again.
+
+  ★ VIRTUAL TOOL DISCIPLINE (applies to EVERY wasi_* tool): each wasi_* call is a UI action
+    the user sees immediately. Never repeat a wasi_* call with the same arguments within a
+    turn or when history shows it already happened — duplicate add_to_cart doubles quantities,
+    duplicate show_progress spams status lines, duplicate grids/cards clutter the chat.
+    To change a quantity use wasi_update_cart_quantity, never a second wasi_add_to_cart.
 
   ★ REAL CATEGORY NAMES (pass these as "category" in T1 to filter results):
     Product: Chocolates | Cakes | Flowers | Fruits | Giftset | combopack | Liquor
@@ -1154,7 +1181,7 @@ async function startServer() {
       }
       res.json({ success: true, products });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1169,7 +1196,7 @@ async function startServer() {
       }, demoMode);
       res.json({ success: true, product });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1179,7 +1206,7 @@ async function startServer() {
       const categories = await callMcpTool('kapruka_list_categories', { depth: 2 }, getMcpMode(req));
       res.json({ success: true, categories });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1195,7 +1222,7 @@ async function startServer() {
       }
       res.json({ success: true, category: found.name, subcategories: found.children || [] });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1206,7 +1233,7 @@ async function startServer() {
       const cities = await callMcpTool('kapruka_list_delivery_cities', { query }, getMcpMode(req));
       res.json({ success: true, cities });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1235,7 +1262,7 @@ async function startServer() {
       // Normalize: live MCP returns 'rate' for delivery cost, frontend expects 'delivery_fee'
       res.json({ success: true, result: { ...result, delivery_fee: result.rate ?? result.delivery_fee ?? 0 } });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1376,7 +1403,7 @@ async function startServer() {
 
       res.json({ success: true, order });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1389,7 +1416,7 @@ async function startServer() {
       }, getMcpMode(req));
       res.json({ success: true, result });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1406,7 +1433,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true, conversations: data || [] });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1431,7 +1458,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true, conversation: data });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1443,7 +1470,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1464,7 +1491,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 
@@ -1566,7 +1593,7 @@ async function startServer() {
       if (error) return res.status(500).json({ success: false, error: error.message });
       res.json({ success: true, title });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: sanitizeError(err) });
+      sendMcpError(res, err);
     }
   });
 

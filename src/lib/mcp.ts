@@ -317,6 +317,20 @@ const MCP_TTL_MS: Record<string, number> = {
 const MCP_CACHE_MAX = 500;
 const mcpCache = new Map<string, { expires: number; value: any }>();
 
+/**
+ * The MCP replied successfully but with a domain error (e.g. product_not_found,
+ * city_not_found). The service is healthy — these must never be retried,
+ * simulated, or counted against the circuit breaker.
+ */
+export class McpBusinessError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'McpBusinessError';
+    this.code = code;
+  }
+}
+
 export async function callMcpTool(toolName: string, args: any, forceDemo: boolean = false): Promise<any> {
   const ttl = MCP_TTL_MS[toolName];
   if (!ttl || forceDemo) return callMcpToolUncached(toolName, args, forceDemo);
@@ -692,6 +706,12 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
       if (textBlock) {
         // MCP encodes errors as strings starting with "Error" even when HTTP 200.
         if (typeof textBlock === 'string' && textBlock.startsWith('Error')) {
+          // "Error (product_not_found): ..." — a domain error, not an outage.
+          const business = textBlock.match(/^Error \((\w+)\)/);
+          if (business) {
+            circuitBreaker.recordSuccess();
+            throw new McpBusinessError(business[1], textBlock);
+          }
           console.warn(`[MCP] Tool '${toolName}' returned error string: ${textBlock.substring(0, 120)}`);
           // Fall through to simulator on last attempt
           if (attempts >= 2) return simulateMcpTool(toolName, args);
@@ -731,6 +751,7 @@ async function callMcpToolUncached(toolName: string, args: any, forceDemo: boole
       return jsonPayload.result;
 
     } catch (error) {
+      if (error instanceof McpBusinessError) throw error;
       console.warn(`Mcp query of '${toolName}' failed: ${(error as any).message}. Utilizing bulletproof simulated fallback.`);
       circuitBreaker.recordFailure((error as any).message?.includes('429'));
       if (attempts >= 2) {
