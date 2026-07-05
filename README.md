@@ -2,8 +2,7 @@
 
 Wasi is a trilingual, multimodal shopping assistant built on Kapruka's live MCP API. Users discover gifts, compare products, build a bundle, validate delivery to any Sri Lankan city, lock prices, and pay on Kapruka — through natural conversation in English, Sinhala, Tamil, or mixed Singlish.
 
-**Live demo:** https://wasi-etpz.onrender.com  
-**Repository:** https://github.com/hareeshkar/wasi
+**Live demo:** https://wasi-etpz.onrender.com 
 
 ---
 
