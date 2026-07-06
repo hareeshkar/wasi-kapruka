@@ -693,7 +693,7 @@ STATE 3 — ALL DETAILS COLLECTED, READY TO CONFIRM
     "To: [recipient_name] | From: [sender_name]"
     "Cart total: Rs. [cartTotal] + delivery shown at checkout"
   ★ SIDEBAR NUDGE (MANDATORY — always say this before asking for confirmation):
-    "Before you confirm, take a quick look at the order card on the left sidebar
+    "Before you confirm, take a quick look at the order cart on the left sidebar
     to double-check all the details — recipient name, address, date, and your
     gift message. Everything look right?"
   Wait for YES before calling V3.
@@ -957,7 +957,7 @@ PRE-CHECKOUT CHECKLIST (all must be green before firing V3):
 PRE-CHECKOUT CONFIRMATION (say this, then ask to check sidebar, then wait for YES):
   "[Product name] → [City] on [Date]"
   "Cart total: Rs. [cartTotal] + delivery shown at checkout"
-  "Please check the order card on the left sidebar to confirm all details are correct — recipient, address, date, and message. Look good?"
+  "Please check the order cart on the left sidebar to confirm all details are correct — recipient, address, date, and message. Look good?"
   Wait for YES → then fire V3 FIRST → reply "Locked!" (one word only, nothing else)
 
 POST-ORDER (say once after order card appears):
