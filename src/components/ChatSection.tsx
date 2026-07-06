@@ -45,7 +45,7 @@ interface ChatSectionProps {
   /** Mobile only: notify parent when the composer gains/loses focus, so the bottom tab bar can tuck away while typing */
   onComposerFocusChange?: (focused: boolean) => void;
   /** Open in-app payment modal for order checkout */
-  onPay?: () => void;
+  onPay?: (order: any) => void;
 }
 
 type ChatPhase = 'discovery' | 'browsing' | 'cart' | 'postorder';

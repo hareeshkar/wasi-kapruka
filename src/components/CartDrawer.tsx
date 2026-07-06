@@ -40,7 +40,7 @@ interface CartDrawerProps {
   onRenewOrder: () => void;
   isDemoMode: boolean;
   orderIntent?: OrderIntent | null;
-  onPay?: () => void;
+  onPay?: (order?: any) => void;
 }
 
 export default function CartDrawer({

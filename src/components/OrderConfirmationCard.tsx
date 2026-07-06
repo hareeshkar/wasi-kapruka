@@ -27,7 +27,7 @@ interface OrderConfirmationCardProps {
   /** Retry checkout after error */
   onRetry?: () => void;
   /** Override default window.open behavior for in-app payment */
-  onPay?: () => void;
+  onPay?: (order: Order) => void;
 }
 
 const LOCALE = {
@@ -430,7 +430,7 @@ export default function OrderConfirmationCard({
         )}
 
         {hasPayUrl ? (
-          <button type="button" onClick={() => onPay ? onPay() : window.open(order.pay_url, '_blank', 'noopener,noreferrer')}
+          <button type="button" onClick={() => onPay ? onPay(order) : window.open(order.pay_url, '_blank', 'noopener,noreferrer')}
             className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-display font-semibold text-[13px] text-white cursor-pointer bg-violet hover:bg-violet-mid active:scale-[0.98] shadow-sm">
             <ExternalLink className="w-3.5 h-3.5" />{t.payOnKapruka}
           </button>
