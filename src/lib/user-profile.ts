@@ -8,6 +8,7 @@ export type UserProfile = {
   last_name?: string;
   email?: string;
   preferred_language?: 'en' | 'si' | 'ta';
+  preferred_currency?: 'LKR' | 'USD' | 'GBP' | 'AUD' | 'EUR';
   date_of_birth?: string;        // ISO yyyy-mm-dd
   gender?: 'female' | 'male' | 'nonbinary' | 'prefer_not_to_say';
   city?: string;
@@ -55,14 +56,15 @@ export function missingEssentialFields(p: UserProfile | null): string[] {
   return missing;
 }
 
-export type OptionalProfileField = 'city' | 'typical_recipient' | 'gender';
+export type OptionalProfileField = 'city' | 'typical_recipient' | 'gender' | 'preferred_currency';
 
 export function missingOptionalFields(p: UserProfile | null): OptionalProfileField[] {
-  if (!p) return ['gender', 'typical_recipient', 'city'];
+  if (!p) return ['gender', 'typical_recipient', 'city', 'preferred_currency'];
   const missing: OptionalProfileField[] = [];
   if (!p.gender)            missing.push('gender');
   if (!p.typical_recipient) missing.push('typical_recipient');
   if (!p.city)              missing.push('city');
+  if (!p.preferred_currency) missing.push('preferred_currency');
   return missing;
 }
 
@@ -112,6 +114,7 @@ export function profileToContext(p: UserProfile | null): string {
   if (p.gender) parts.push(`Gender: ${p.gender}`);
   if (p.city) parts.push(`City: ${p.city}`);
   if (p.typical_recipient) parts.push(`Typical recipient: ${p.typical_recipient}`);
+  if (p.preferred_currency) parts.push(`Preferred currency: ${p.preferred_currency}`);
   if (p.interests && p.interests.length) parts.push(`Interests: ${p.interests.join(', ')}`);
   return parts.length ? parts.join(' | ') : 'Empty profile.';
 }

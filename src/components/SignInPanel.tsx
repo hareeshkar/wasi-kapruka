@@ -58,6 +58,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
   const [password, setPassword] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [preferredLang, setPreferredLang] = useState<'en' | 'si' | 'ta'>(lang);
+  const [preferredCurrency, setPreferredCurrency] = useState<'LKR' | 'USD' | 'GBP' | 'AUD' | 'EUR'>('LKR');
   const [showDobWhy, setShowDobWhy] = useState(false);
   const [status, setStatus]     = useState<Status>('idle');
   const [message, setMessage]   = useState<string>('');
@@ -67,6 +68,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
   const reset = () => {
     setFirstName(''); setLastName(''); setEmail(''); setPassword(''); setDateOfBirth('');
     setPreferredLang(lang);
+    setPreferredCurrency('LKR');
     setShowDobWhy(false);
     setStatus('idle'); setMessage('');
   };
@@ -105,6 +107,7 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
             email:      email.trim(),
             date_of_birth: dateOfBirth || undefined,
             preferred_language: preferredLang,
+            preferred_currency: preferredCurrency,
             // Mark complete only if essentials are filled
             profile_complete: !!(firstName.trim() && preferredLang),
           });
@@ -262,6 +265,26 @@ export default function SignInPanel({ open, onClose, lang = 'en' }: SignInPanelP
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Currency preference — signup only */}
+          {mode === 'signup' && (
+            <div>
+              <label className="block text-[11px] font-mono font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                💱 Currency
+              </label>
+              <select
+                value={preferredCurrency}
+                onChange={(e) => setPreferredCurrency(e.target.value as typeof preferredCurrency)}
+                className="w-full px-3 py-2.5 min-h-[40px] rounded-xl text-sm border border-black/10 bg-white text-gray-700 focus:border-[#402970]/40 focus:outline-none focus:ring-2 focus:ring-[#402970]/10 transition cursor-pointer"
+              >
+                <option value="LKR">Rs — Sri Lankan Rupee</option>
+                <option value="USD">$ — US Dollar</option>
+                <option value="GBP">£ — British Pound</option>
+                <option value="EUR">€ — Euro</option>
+                <option value="AUD">A$ — Australian Dollar</option>
+              </select>
             </div>
           )}
 

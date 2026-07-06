@@ -28,12 +28,21 @@ const RECIPIENT_CHIPS: { code: UserProfile['typical_recipient']; label: { en: st
   { code: 'colleague', label: { en: 'Colleague / boss',    si: 'සගයෙක් / ලොක්කා',   ta: 'சக ஊழியர் / முதலாளி' }, emoji: '💼' },
 ];
 
+const CURRENCY_OPTS: { code: NonNullable<UserProfile['preferred_currency']>; label: { en: string; si: string; ta: string }; symbol: string }[] = [
+  { code: 'LKR', label: { en: 'Sri Lankan Rupee', si: 'ශ්‍රී ලංකා රුපියල', ta: 'இலங்கை ரூபாய்' }, symbol: 'Rs' },
+  { code: 'USD', label: { en: 'US Dollar',         si: 'ඇමරිකානු ඩොලර්',    ta: 'அமெரிக்க டாலர்' }, symbol: '$' },
+  { code: 'GBP', label: { en: 'British Pound',     si: 'බ්‍රිතාන්‍ය පවුම්',    ta: 'பிரிட்டிஷ் பவுண்ட்' }, symbol: '£' },
+  { code: 'EUR', label: { en: 'Euro',              si: 'යූරෝ',                ta: 'யூரோ' }, symbol: '€' },
+  { code: 'AUD', label: { en: 'Australian Dollar', si: 'ඔස්ට්‍රේලියානු ඩොලර්', ta: 'ஆஸ்திரேலிய டாலர்' }, symbol: 'A$' },
+];
+
 const SL_CITIES = ['Colombo', 'Kandy', 'Galle', 'Negombo', 'Jaffna', 'Matara', 'Kurunegala'];
 
 const STEP_TITLES: Record<string, { en: string; emoji: string }> = {
   gender:            { en: 'First up — your gender?',          emoji: '🌿' },
   typical_recipient: { en: 'Who do you usually gift to?',      emoji: '🎁' },
   city:              { en: 'And your city?',                   emoji: '📍' },
+  preferred_currency:{ en: 'What currency do you use?',        emoji: '💱' },
 };
 
 export default function ProgressiveProfilePrompt({
@@ -49,7 +58,7 @@ export default function ProgressiveProfilePrompt({
   if (fields.length === 0) return null;
 
   // Build ordered steps from ONLY the missing fields
-  const orderedFields = ['gender', 'typical_recipient', 'city']
+  const orderedFields = ['gender', 'typical_recipient', 'city', 'preferred_currency']
     .filter(f => fields.includes(f as OptionalProfileField)) as OptionalProfileField[];
   const totalSteps = orderedFields.length;
   const currentField = orderedFields[step];
@@ -238,6 +247,33 @@ export default function ProgressiveProfilePrompt({
             </div>
           )}
 
+          {/* ── STEP: Currency ── */}
+          {currentField === 'preferred_currency' && (
+            <div className="space-y-4">
+              <p className="text-lg font-semibold text-ink leading-snug">
+                What currency do you use?
+              </p>
+              <p className="text-sm text-gray-400 -mt-2">
+                Prices will be shown in this currency. You can always change later.
+              </p>
+              <div role="radiogroup" aria-label="Select currency" className="grid grid-cols-1 gap-2">
+                {CURRENCY_OPTS.map(({ code, label, symbol }, i) => (
+                  <button
+                    key={code}
+                    ref={i === 0 ? firstFieldRef : undefined}
+                    type="button"
+                    disabled={saving}
+                    onClick={() => advance({ preferred_currency: code })}
+                    className="flex items-center gap-3 px-4 py-3 min-h-[48px] rounded-xl text-sm font-medium border border-black/10 bg-white text-gray-700 hover:bg-[#EDE5F8] hover:border-[#402970]/30 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="text-base font-mono font-bold text-[#402970] w-7">{symbol}</span>
+                    <span>{label[lang] ?? label.en}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Footer buttons */}
@@ -306,6 +342,18 @@ export default function ProgressiveProfilePrompt({
                   Skip
                 </button>
               </div>
+            </div>
+          )}
+
+          {currentField === 'preferred_currency' && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => advance()}
+                className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer transition"
+              >
+                Skip — keep LKR
+              </button>
             </div>
           )}
         </div>

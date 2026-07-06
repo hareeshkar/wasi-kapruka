@@ -429,7 +429,10 @@ export default function CartDrawer({
                   </span>
                 )}
                 <p className="text-[10px] font-mono text-gray-400">
-                  {formatPrice(item.price_lkr, detectCurrency(item) as Currency)}
+                  {formatPrice(
+                    convertedPrices[item.product_code] ?? item.price_lkr,
+                    (conversionCurrency || detectCurrency(item)) as Currency
+                  )}
                 </p>
               </div>
 

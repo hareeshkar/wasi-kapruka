@@ -46,6 +46,13 @@ export default function App() {
   const [showSaveBanner, setShowSaveBanner] = useState(false);
   const bannerDismissed = useRef(false);
 
+  // Sync userCurrency from profile when it loads
+  useEffect(() => {
+    if (profile?.preferred_currency && profile.preferred_currency !== userCurrency) {
+      setUserCurrency(profile.preferred_currency);
+    }
+  }, [profile?.preferred_currency]);
+
   // ── Conversations (sidebar) ─────────────────────────────────────────────────
   const {
     conversations, loading: convsLoading, refresh: refreshConvs,
