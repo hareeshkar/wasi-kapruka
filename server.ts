@@ -455,6 +455,9 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
 [V2] wasi_add_to_cart
   params : product_id (REQUIRED — exact from T1), product_name (REQUIRED), price_lkr (REQUIRED),
            image_url (REQUIRED), category (REQUIRED), variant_id?, variant_name?, quantity?
+  CURRENCY: price_lkr MUST be in LKR (Sri Lankan Rupees). If you searched with currency=USD,
+    the prices in T1 results are in USD. Pass the LKR price (from the original search or from
+    price_lkr field without currency conversion). The server normalizes if needed.
   WHEN   : user gives CLEAR explicit consent — words below are the ONLY valid triggers:
     English : "add it", "add this", "yes add", "ok add", "I'll take it", "put it in",
               "yes", "ok", "sure", "go ahead", "let's go with that", "that one"
@@ -625,12 +628,41 @@ STATE 1 — PRODUCT BEING EVALUATED (user is considering a specific product)
 
 STATE 2 — CART HAS ITEMS, COLLECTING DELIVERY DETAILS
   Every message → scan for V1 data FIRST, call V1 immediately
-  Ask for ONE missing field at a time: 1.city → 2.delivery_date → 3.recipient_phone → 4.delivery_address → 5.sender_name
+  Ask for ONE missing field at a time in this EXACT order:
+    1.city → 2.delivery_date → 3.recipient_phone → 4.delivery_address → 5.sender_name
   Once city + date known → call T4 (get canonical city) → call T5 (delivery check, passing product_id for cakes/flowers)
   Report: "Delivery to [City] is available on [date]! The fee will show at checkout."
   ★ Delivery fee is FLAT per order — adding more items doesn't change it. No need to warn user about fee growing.
   ★ location_type (house/apartment/office/other) is optional — if user mentions office/flat/apartment, pass it in T6.
   Slot unavailable → "Slots are full for [date] to [City]. Next available: [date]. Shall I use that?"
+
+  ★ CAKE ICING TEXT (MANDATORY — never skip):
+    After adding a cake to cart, ALWAYS ask: "What should I write on the cake?"
+    This is NOT optional — Kapruka prints the icing text on the cake.
+    If the user hasn't provided icing text by STATE 3, ask AGAIN before confirming.
+    icing_text is sent via V2 (wasi_add_to_cart) or V3 (wasi_order_now) and passed
+    to T6 (kapruka_create_order) as items[].icing_text.
+    If user says "no text" or "plain" → leave icing_text empty, but ASK first.
+
+  ★ GIFT MESSAGE (MANDATORY in gift mode — never skip):
+    In GIFT MODE (default), ALWAYS collect a gift message before STATE 3.
+    Ask: "Would you like to include a gift message? I'll write it on the card."
+    If user says "no message" or "skip" → proceed without one.
+    But NEVER skip the ask — the greeting card is a core part of the Kapruka gift experience.
+    Gift message is sent via V3 (wasi_order_now) gift_message field → T6.
+    Gift messages should be warm, personal, 1-3 sentences max.
+
+  ★ DELIVERY INSTRUCTIONS (ask for apartments/offices — recommended for all):
+    After collecting the address:
+    - If address mentions apartment/flat/condo/office/building → ask: "Any gate code, floor number, or buzzer I should note?"
+    - For house addresses → ask: "Any delivery instructions? (gate code, landmark, etc.)"
+    - If user says "no" or "none" → proceed.
+    - delivery_instructions is sent via V3 → T6. Max 250 chars.
+
+  ★ FORM STATE AWARENESS:
+    You receive formState in SESSION CONTEXT showing which fields the user already
+    filled in via the sidebar form. NEVER re-ask for a field that formState shows
+    as already filled. Only ask for MISSING fields.
 
 STATE 2b — CART MUTATION (user says remove/update/quantity change)
   MANDATORY SEQUENCE — follow exactly, no shortcuts:
@@ -644,9 +676,26 @@ STATE 2b — CART MUTATION (user says remove/update/quantity change)
     These are DELIVERY INQUIRIES — respond with delivery info, not cart mutations.
 
 STATE 3 — ALL DETAILS COLLECTED, READY TO CONFIRM
-  Show brief summary (2 lines max):
+  PRE-CHECKOUT MANDATORY CHECK (all must be collected before you even enter STATE 3):
+    ✓ cart.count > 0
+    ✓ recipient_name (actual name, not role word like "mom" or "wife")
+    ✓ recipient_phone
+    ✓ delivery.address (recipient's full address)
+    ✓ delivery.city (canonical from T4)
+    ✓ delivery.date (YYYY-MM-DD, today or future)
+    ✓ sender.name (skip in self mode — use recipient.name)
+    ✓ gift_message collected (gift mode) — even if user said "no message", you asked
+    ✓ icing_text collected if cart contains cake — even if user said "plain", you asked
+    ✗ email — NOT on the checklist; never block checkout waiting for email
+
+  Show brief summary (2-3 lines max):
     "[Product] → [City] on [Date]"
-    "Cart total: Rs. [items_total] + delivery (shown at checkout) • Ready to lock this in?"
+    "To: [recipient_name] | From: [sender_name]"
+    "Cart total: Rs. [cartTotal] + delivery shown at checkout"
+  ★ SIDEBAR NUDGE (MANDATORY — always say this before asking for confirmation):
+    "Before you confirm, take a quick look at the order card on the left sidebar
+    to double-check all the details — recipient name, address, date, and your
+    gift message. Everything look right?"
   Wait for YES before calling V3.
 
 STATE 4 — CHECKOUT TRIGGERED
@@ -757,15 +806,29 @@ DELIVERY ADDRESS = recipient's address, NOT the sender's home address.
 EMAIL: never collect, never ask. Kapruka emails the order/tracking number after payment.
 
 ════════════════════════════════════════════════════════════
-§6  BUDGET LAW
+§6  BUDGET LAW + CURRENCY RULES
 ════════════════════════════════════════════════════════════
 Budget = hard ceiling from onboarding (SESSION_CONTEXT). Non-negotiable per session.
-  ALWAYS pass max_price=budget to T1.
+  ALWAYS pass max_price=budget to T1. CRITICAL: max_price is ALWAYS in LKR — even when currency=USD.
+  If user says "$20 budget", convert to LKR first (~270 LKR/USD → max_price=5400) then pass that.
   NEVER suggest, add, or display products above budget.
   If user requests an over-budget product: "That's Rs.[price] — Rs.[over] above your Rs.[budget] budget.
   Want me to find something similar within budget?"
   Budget includes product price only — delivery fee is additional (show as "+ delivery").
   If cart total + estimated_fee > budget → warn but don't block checkout.
+
+CURRENCY RULES (CRITICAL — MANDATORY):
+  If SESSION CONTEXT includes "Preferred currency: <CURRENCY>":
+    1. ALWAYS pass currency=<CURRENCY> to T1 (kapruka_search_products), T2 (kapruka_get_product), T6 (kapruka_create_order)
+    2. MCP converts prices at live rates server-side — prices returned are already in the user's currency
+    3. For quick quote comparisons (before adding to cart), call wasi_convert_currency with the cart items + target currency
+    4. NEVER display LKR prices when user prefers a foreign currency — always show converted amounts
+    5. Exchange rate shown at checkout via order card
+    6. IMPORTANT: max_price is ALWAYS in LKR, regardless of currency param. If user says "$15 budget",
+       convert to LKR first (~270 LKR/USD → max_price=4050). The MCP filters by LKR internally.
+  If user mentions a foreign currency mid-conversation but it's not yet in SESSION CONTEXT:
+    → Set the currency in session context (it persists across turns) and confirm: "Got it — I'll show you prices in USD."
+  NEVER assume currency from city/country — always use the explicit SESSION CONTEXT value.
 
 ════════════════════════════════════════════════════════════
 §7  DELIVERY LAW
@@ -887,13 +950,15 @@ PRE-CHECKOUT CHECKLIST (all must be green before firing V3):
   ✓ delivery.city (canonical from T4)
   ✓ delivery.date (YYYY-MM-DD, today or future)
   ✓ sender.name (skip in self mode — use recipient.name)
+  ✓ gift_message — asked in gift mode (even if declined)
+  ✓ icing_text — asked if cart contains cake (even if declined)
   ✗ email — NOT on the checklist; never block checkout waiting for email
 
-PRE-CHECKOUT CONFIRMATION (say this, then wait for YES):
+PRE-CHECKOUT CONFIRMATION (say this, then ask to check sidebar, then wait for YES):
   "[Product name] → [City] on [Date]"
-  "Cart total: Rs. [cartTotal] + delivery shown at checkout • Lock it in?"
-
-ON YES → fire V3 FIRST → reply "Locked!" (one word only, nothing else)
+  "Cart total: Rs. [cartTotal] + delivery shown at checkout"
+  "Please check the order card on the left sidebar to confirm all details are correct — recipient, address, date, and message. Look good?"
+  Wait for YES → then fire V3 FIRST → reply "Locked!" (one word only, nothing else)
 
 POST-ORDER (say once after order card appears):
   "Open Kapruka Checkout to complete payment — enter your email there
@@ -1223,6 +1288,52 @@ async function startServer() {
       res.json({ success: true, category: found.name, subcategories: found.children || [] });
     } catch (err: any) {
       sendMcpError(res, err);
+    }
+  });
+
+  // ── REST: Convert cart prices to target currency ────────────────────────────
+  // When the user switches currency in the cart drawer, this endpoint fetches
+  // converted prices from MCP for each product and returns updated totals.
+  // POST /api/convert-prices  { items: [{ product_code, price_lkr, quantity }], currency: "USD" }
+  app.post('/api/convert-prices', async (req, res) => {
+    try {
+      const { items, currency } = req.body;
+      if (!Array.isArray(items) || !currency) {
+        return res.status(400).json({ success: false, error: 'items (array) and currency required' });
+      }
+      const supported = ['LKR', 'USD', 'GBP', 'AUD', 'CAD', 'EUR'];
+      if (!supported.includes(currency)) {
+        return res.status(400).json({ success: false, error: `Unsupported currency: ${currency}` });
+      }
+      if (currency === 'LKR') {
+        // No conversion needed — return items as-is
+        const total = items.reduce((s: number, i: any) => s + (i.price_lkr * (i.quantity || 1)), 0);
+        return res.json({ success: true, currency: 'LKR', items: items.map((i: any) => ({ ...i, converted_price: i.price_lkr })), total });
+      }
+      // Fetch each product from MCP with target currency — MCP returns converted prices
+      const demoMode = getMcpMode(req);
+      const converted = await Promise.all(
+        items.map(async (item: any) => {
+          try {
+            const product = await callMcpTool('kapruka_get_product', {
+              product_id:   item.product_code,
+              product_code: item.product_code,
+              id:           item.product_code,
+              currency,
+            }, demoMode);
+            const price = product?.price?.amount ?? product?.price_lkr ?? item.price_lkr;
+            return { ...item, converted_price: price, currency };
+          } catch {
+            // If MCP call fails, return original LKR price (display will show LKR value with symbol — not ideal but doesn't break)
+            return { ...item, converted_price: item.price_lkr, currency: 'LKR', conversion_failed: true };
+          }
+        })
+      );
+      const total = converted.reduce((s: number, i: any) => s + (i.converted_price * (i.quantity || 1)), 0);
+      res.json({ success: true, currency, items: converted, total });
+    } catch (err: any) {
+      console.error('[convert-prices]', err);
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 
@@ -1605,6 +1716,7 @@ async function startServer() {
       language,
       budget,
       occasion,
+      currency,
       cart,
       lastCartAction,
       formState,
@@ -1783,7 +1895,8 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
     const sessionContext = [
       'SESSION CONTEXT (authoritative — do not re-ask):',
       occasion ? `- Occasion: ${occasion} — prioritised search terms: ${OCCASION_HINTS[occasion] ?? 'chocolate'}` : '',
-      budget > 0 ? `- Budget: ${Number(budget).toLocaleString()} (user's stated amount) — ALWAYS pass max_price=${budget} to T1. If user mentioned a foreign currency (USD/GBP/EUR/AUD/CAD), also pass currency=<that currency> to T1/T2/T6 — MCP converts natively at current rates.` : '',
+      budget > 0 ? `- Budget: ${Number(budget).toLocaleString()} (user's stated amount) — ALWAYS pass max_price=${budget} to T1. CRITICAL: max_price is ALWAYS in LKR. If user mentioned a foreign currency, convert budget to LKR (~270 LKR/USD, ~362 LKR/GBP) before passing max_price. Also pass currency=<that currency> to T1/T2/T6 — MCP converts natively at current rates.` : '',
+      currency && currency !== 'LKR' ? `- Preferred currency: ${currency}. ALWAYS pass currency=${currency} to T1 (kapruka_search_products), T2 (kapruka_get_product), T6 (kapruka_create_order). MCP converts prices at live rates. For quick quotes, call wasi_convert_currency.` : '',
       `- Cart:\n${cartSummary}`,
       lastCartAction ? `- Recent cart action: ${lastCartAction}` : '',
       cartLines.length > 0 ? '- Do NOT recommend items already in cart unless asked.' : '',
@@ -1890,13 +2003,52 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
               ].filter(Boolean),
             };
           }
-          if ([
-            'wasi_prefill_checkout', 'wasi_add_to_cart', 'wasi_order_now',
-            'wasi_show_progress',
-            'wasi_remove_from_cart', 'wasi_update_cart_quantity',
-            'wasi_show_product_detail', 'wasi_compare_products',
-            'wasi_new_order'
-          ].includes(toolCall.name)) {
+          if (toolCall.name === 'wasi_add_to_cart') {
+            // Normalize price to LKR before passing to client — cart always stores LKR prices.
+            // MCP search with currency=USD returns USD prices in price_lkr field, but cart
+            // expects LKR. Fetch the real LKR price from MCP if needed.
+            const itemCurrency = toolCall.args?.currency || 'LKR';
+            if (itemCurrency !== 'LKR' && toolCall.args?.price_lkr) {
+              try {
+                const lkrProduct = await callMcpTool('kapruka_get_product', {
+                  product_id: toolCall.args.product_id,
+                  product_code: toolCall.args.product_id,
+                  id: toolCall.args.product_id,
+                  currency: 'LKR',
+                }, false);
+                const lkrPrice = lkrProduct?.price?.amount;
+                if (lkrPrice && typeof lkrPrice === 'number' && lkrPrice > 0) {
+                  toolCall.args.price_lkr = lkrPrice;
+                  toolCall.args.currency = 'LKR';
+                }
+              } catch {
+                // If LKR fetch fails, keep original price — not ideal but doesn't break
+              }
+            }
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_show_progress') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_prefill_checkout') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_order_now') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_remove_from_cart') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_update_cart_quantity') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_show_product_detail') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_compare_products') {
+            return { _virtual: true, ...toolCall.args };
+          }
+          if (toolCall.name === 'wasi_new_order') {
             return { _virtual: true, ...toolCall.args };
           }
           // wasi_show_categories — fetch live categories from Kapruka MCP
@@ -1922,6 +2074,62 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
               return { _virtual: true, category: found.name, subcategories: found.children || [] };
             } catch {
               return { _virtual: true, category: toolCall.args?.category || '', subcategories: [] };
+            }
+          }
+          // wasi_convert_currency — fetch live converted prices from MCP for each cart item
+          if (toolCall.name === 'wasi_convert_currency') {
+            const targetCurrency = toolCall.args?.currency;
+            const supported = ['USD', 'GBP', 'AUD', 'CAD', 'EUR'];
+            if (!targetCurrency || !supported.includes(targetCurrency)) {
+              return { error: `Unsupported currency: ${targetCurrency}. Use USD, GBP, AUD, CAD, or EUR.` };
+            }
+            if (cartLines.length === 0) {
+              return { error: 'Cart is empty — add items before converting currency.', items: [], total: 0, currency: targetCurrency };
+            }
+            try {
+              const converted = await Promise.all(
+                cartLines.map(async (item: any) => {
+                  try {
+                    const product = await callMcpTool('kapruka_get_product', {
+                      product_id: item.product_code,
+                      product_code: item.product_code,
+                      id: item.product_code,
+                      currency: targetCurrency,
+                    }, false);
+                    const convertedPrice = product?.price?.amount ?? item.price_lkr;
+                    return {
+                      product_code: item.product_code,
+                      name: item.name,
+                      original_price_lkr: item.price_lkr,
+                      converted_price: convertedPrice,
+                      quantity: item.quantity,
+                    };
+                  } catch {
+                    // MCP failed for this item — return original LKR price
+                    return {
+                      product_code: item.product_code,
+                      name: item.name,
+                      original_price_lkr: item.price_lkr,
+                      converted_price: item.price_lkr,
+                      quantity: item.quantity,
+                      conversion_failed: true,
+                    };
+                  }
+                })
+              );
+              const total = converted.reduce((s: number, i: any) => s + (i.converted_price * i.quantity), 0);
+              const lkrTotal = cartLines.reduce((s: number, i: any) => s + (i.price_lkr * i.quantity), 0);
+              // Compute approximate exchange rate for transparency
+              const rate = lkrTotal > 0 && total > 0 ? Math.round((lkrTotal / total) * 100) / 100 : null;
+              return {
+                items: converted,
+                total: Math.round(total * 100) / 100,
+                currency: targetCurrency,
+                lkr_total: lkrTotal,
+                exchange_rate: rate ? `1 ${targetCurrency} ≈ ${rate} LKR` : null,
+              };
+            } catch (err: any) {
+              return { error: `Currency conversion failed: ${err.message}`, items: [], total: 0, currency: targetCurrency };
             }
           }
           return await callMcpTool(toolCall.name, toolCall.args, false); // always live

@@ -575,6 +575,39 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
       properties: {},
       required: []
     }
+  },
+  {
+    name: 'wasi_convert_currency',
+    description: `WASI UI TOOL — Convert cart item prices to a foreign currency using Kapruka's live exchange rates. Call when:
+(1) User mentions a foreign currency: "in dollars", "in pounds", "how much in USD", "show me prices in EUR", "报价换成美元"
+(2) User is abroad (diaspora mode): "I'm in London", "from Australia", "sending home from Dubai"
+(3) You need to quote an accurate foreign-currency total in your response (STATE 3 confirmation)
+(4) User asks "how much is this in [currency]?"
+
+IMPORTANT: This tool converts the ENTIRE cart to the target currency. The MCP returns live-converted prices using Kapruka's current exchange rates. You will receive converted item prices and a total. Use these EXACT values when quoting prices to the user — do NOT manually convert or guess exchange rates.
+
+Supported currencies: USD, GBP, AUD, CAD, EUR.
+
+The tool returns:
+- items: each cart item with converted_price in the target currency
+- total: sum of all converted item prices
+- currency: the target currency code
+- rates: approximate exchange rates for transparency
+
+After calling this tool, quote the converted total to the user. Example: "That's about $85 USD for everything — want to lock it in?"
+
+Sinhala: "meka dollar walata convert karanawa", "paraya kiyada"
+Tamil: "idhu dollar-la evlo", "maara vilai"`,
+    parameters: {
+      type: 'object',
+      properties: {
+        currency: {
+          type: 'string',
+          description: 'Target currency code: USD | GBP | AUD | CAD | EUR'
+        }
+      },
+      required: ['currency']
+    }
   }
 ];
 

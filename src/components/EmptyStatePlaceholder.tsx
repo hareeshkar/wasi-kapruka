@@ -443,6 +443,20 @@ export default function EmptyStatePlaceholder({
             </div>
           </form>
 
+          {/* Voice hands-free hint */}
+          {onSendVoice && (
+            <div className="mt-3 flex items-center justify-center gap-1.5 animate-fadeInUp" style={{ animationDelay: '0.85s' }}>
+              <div className="flex items-center gap-[2px] h-3">
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="w-[2px] rounded-full" style={{ height: i === 1 ? '10px' : '6px', background: 'rgba(64,41,112,0.20)', animation: `waveBar 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+                ))}
+              </div>
+              <span className="text-[10px] font-mono" style={{ color: 'rgba(64,41,112,0.30)' }}>
+                {lang === 'en' ? 'Tap mic for a fully hands-free experience' : lang === 'si' ? 'Mic එක tap කරන්න hands-free අත්දැකීමක් සඳහා' : 'Mic-ஐ அழுத்தி hands-free அனுபவத்தைப் பெறுங்கள்'}
+              </span>
+            </div>
+          )}
+
           {!isSignedIn && (
             <button onClick={onSignIn} className="mt-4 text-[11px] cursor-pointer block w-full text-center transition-colors font-medium" style={{ color: 'rgba(109,40,217,0.50)' }}>
               {t('signIn', lang)}

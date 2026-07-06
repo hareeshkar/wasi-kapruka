@@ -26,6 +26,8 @@ interface OrderConfirmationCardProps {
   errorMessage?: string | null;
   /** Retry checkout after error */
   onRetry?: () => void;
+  /** Override default window.open behavior for in-app payment */
+  onPay?: () => void;
 }
 
 const LOCALE = {
@@ -159,7 +161,7 @@ function isOrderActionable(order: Order): boolean {
 
 export default function OrderConfirmationCard({
   order, cart = [], currency = 'LKR', deliveryMeta, onRenew, onShare, lang = 'en',
-  isLoading = false, errorMessage = null, onRetry,
+  isLoading = false, errorMessage = null, onRetry, onPay,
 }: OrderConfirmationCardProps) {
   const t = LOCALE[lang] || LOCALE.en;
   const fontClass = lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : '';
@@ -428,7 +430,7 @@ export default function OrderConfirmationCard({
         )}
 
         {hasPayUrl ? (
-          <button type="button" onClick={() => window.open(order.pay_url, '_blank', 'noopener,noreferrer')}
+          <button type="button" onClick={() => onPay ? onPay() : window.open(order.pay_url, '_blank', 'noopener,noreferrer')}
             className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-display font-semibold text-[13px] text-white cursor-pointer bg-violet hover:bg-violet-mid active:scale-[0.98] shadow-sm">
             <ExternalLink className="w-3.5 h-3.5" />{t.payOnKapruka}
           </button>

@@ -40,6 +40,7 @@ interface CartDrawerProps {
   onRenewOrder: () => void;
   isDemoMode: boolean;
   orderIntent?: OrderIntent | null;
+  onPay?: () => void;
 }
 
 export default function CartDrawer({
@@ -56,6 +57,7 @@ export default function CartDrawer({
   onRenewOrder,
   isDemoMode,
   orderIntent,
+  onPay,
 }: CartDrawerProps) {
   // Recipient info states
   const [recipientName, setRecipientName] = useState('');
@@ -103,8 +105,61 @@ export default function CartDrawer({
   const isPerishable = cart.some(item => looksLikeCake(item) || looksLikeFlower(item));
   const containsCake = cart.some(item => looksLikeCake(item));
 
-  // Calculate cart subtotal
-  const subtotal = cart.reduce((acc, item) => acc + (item.price_lkr * item.quantity), 0);
+  // Calculate cart subtotal (always in LKR for internal logic)
+  const subtotalLkr = cart.reduce((acc, item) => acc + (item.price_lkr * item.quantity), 0);
+
+  // ── Currency conversion via MCP ────────────────────────────────────────────
+  // When the user switches currency, fetch real converted prices from Kapruka MCP
+  // so the cart shows accurate foreign-currency amounts (not just Rs.XXX relabeled).
+  const [convertedPrices, setConvertedPrices] = useState<Record<string, number>>({});
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionCurrency, setConversionCurrency] = useState('LKR');
+
+  useEffect(() => {
+    if (currency === 'LKR') {
+      setConvertedPrices({});
+      setConversionCurrency('LKR');
+      return;
+    }
+    if (cart.length === 0) return;
+
+    let cancelled = false;
+    setIsConverting(true);
+
+    fetch('/api/convert-prices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: cart.map(i => ({
+          product_code: i.product_code,
+          price_lkr: i.price_lkr,
+          quantity: i.quantity,
+        })),
+        currency,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        if (data.success && data.items) {
+          const map: Record<string, number> = {};
+          for (const item of data.items) {
+            map[item.product_code] = item.converted_price;
+          }
+          setConvertedPrices(map);
+          setConversionCurrency(data.currency);
+        }
+        setIsConverting(false);
+      })
+      .catch(() => { if (!cancelled) setIsConverting(false); });
+
+    return () => { cancelled = true; };
+  }, [currency, cart.length, cart.map(i => i.product_code).join(',')]);
+
+  // Display subtotal — converted if available, otherwise LKR
+  const displaySubtotal = currency === 'LKR' || conversionCurrency !== currency || Object.keys(convertedPrices).length === 0
+    ? subtotalLkr
+    : cart.reduce((acc, item) => acc + ((convertedPrices[item.product_code] ?? item.price_lkr) * item.quantity), 0);
 
   // Fuzzy search cities
   useEffect(() => {
@@ -733,7 +788,13 @@ export default function CartDrawer({
           <div className="pt-2 border-t border-black/5">
             <div className="flex justify-between text-xs text-[#6B6B6B] font-mono">
               <span className={lang === 'si' ? 'font-sinhala' : ''}>{getLoc('sub')}</span>
-              <span>{formatPrice(subtotal, currency as Currency)}</span>
+              <span>
+                {isConverting ? (
+                  <span className="text-gray-400 animate-pulse">Converting…</span>
+                ) : (
+                  formatPrice(displaySubtotal, currency as Currency)
+                )}
+              </span>
             </div>
             <p className="text-[9px] font-mono text-gray-400 mt-1">Delivery fee shown after order is locked</p>
           </div>
@@ -773,6 +834,7 @@ export default function CartDrawer({
           onRetry={onClearOrderError}
           onRenew={onRenewOrder}
           onShare={triggerShare}
+          onPay={onPay}
           deliveryMeta={orderIntent ? {
             recipientName: orderIntent.recipient_name,
             deliveryDate:  orderIntent.delivery_date,

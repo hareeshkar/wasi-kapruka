@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, Product, Order, City, OrderIntent } from './types';
-import { Zap, ShoppingBag, X, Plus, Globe, LogIn, LogOut, PanelLeftClose } from 'lucide-react';
+import { Zap, ShoppingBag, X, Plus, Globe, LogIn, LogOut, PanelLeftClose, Package, MapPin, Calendar, User } from 'lucide-react';
 import { KaprukaLogo } from './lib/kapruka';
 import { formatPrice, detectCurrency, type Currency } from './lib/currency';
 import ChatSection from './components/ChatSection';
@@ -11,6 +11,7 @@ import ProductTour, { isProductTourComplete } from './components/ProductTour';
 import SaveCartBanner from './components/SaveCartBanner';
 import ProgressiveProfilePrompt from './components/ProgressiveProfilePrompt';
 import ProductDetailModal from './components/ProductDetailModal';
+import PaymentModal from './components/PaymentModal';
 import ErrorToast from './components/ErrorToast';
 import { useSupabaseCart } from './hooks/useSupabaseCart';
 import { useSupabaseChat } from './hooks/useSupabaseChat';
@@ -34,6 +35,7 @@ export default function App() {
   const [language, setLanguage] = useState<'en' | 'si' | 'ta'>('en');
   const [budget, setBudget] = useState<number>(0);
   const [occasion, setOccasion] = useState<string>('');
+  const [userCurrency, setUserCurrency] = useState<string>('LKR');
 
   // Auth + profile
   const { user, loading: authLoading, signOut } = useAuth();
@@ -56,6 +58,9 @@ export default function App() {
   // Cart overlay open/close
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
+
+  // Payment modal (in-app checkout)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   // Sidebar expand/collapse (expanded by default)
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
@@ -524,7 +529,7 @@ export default function App() {
         'wasi_update_cart_quantity', 'wasi_show_progress', 'wasi_order_now',
         'wasi_show_product_detail', 'wasi_compare_products', 'wasi_show_categories',
         'wasi_browse_subcategories', 'wasi_new_order', 'wasi_get_form_state',
-        'wasi_get_cart',
+        'wasi_get_cart', 'wasi_convert_currency',
       ];
       if (!KNOWN_TOOLS.includes(tc.toolName)) {
         console.warn(`[processToolCalls] Unrecognized tool name: "${tc.toolName}" — result discarded. Possible LLM typo or new tool not yet integrated.`);
@@ -808,6 +813,7 @@ export default function App() {
           language,
           budget,
           occasion,
+          currency: userCurrency,
           session_id: sessionId,
           owner_id: ownerId,
           conversation_id: activeConvId,
@@ -1657,6 +1663,49 @@ export default function App() {
           )}
         </nav>
 
+        {/* ── Order summary card (sidebar) — shows when an order is active ── */}
+        {sidebarExpanded && orderResult && orderResult.order_ref && (
+          <div className="mx-1 mb-3 p-3 rounded-2xl border border-[#C9A84C]/20 bg-gradient-to-b from-[#FDF9EE] to-white" style={{ boxShadow: '0 2px 12px rgba(201,168,76,0.10)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Package className="w-3.5 h-3.5" style={{ color: '#C9A84C' }} />
+              <span className="text-[9px] font-mono font-bold uppercase tracking-wider" style={{ color: '#C9A84C' }}>Order Details</span>
+            </div>
+            {orderIntent?.recipient_name && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <User className="w-3 h-3 text-[#5B3E8A] flex-shrink-0" style={{ width: 10, height: 10 }} />
+                <span className="text-[10px] font-mono text-[#5B3E8A] truncate">{orderIntent.recipient_name}</span>
+              </div>
+            )}
+            {orderIntent?.city_name && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <MapPin className="w-3 h-3 text-[#5B3E8A] flex-shrink-0" style={{ width: 10, height: 10 }} />
+                <span className="text-[10px] font-mono text-[#5B3E8A] truncate">{orderIntent.city_name}</span>
+              </div>
+            )}
+            {orderIntent?.delivery_date && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <Calendar className="w-3 h-3 text-[#5B3E8A] flex-shrink-0" style={{ width: 10, height: 10 }} />
+                <span className="text-[10px] font-mono text-[#5B3E8A]">{orderIntent.delivery_date}</span>
+              </div>
+            )}
+            {orderResult.total_lkr > 0 && (
+              <div className="mt-2 pt-2 border-t border-[#C9A84C]/10 flex items-center justify-between">
+                <span className="text-[9px] font-mono text-[#B0A8BC] uppercase">Total</span>
+                <span className="text-[12px] font-display font-bold" style={{ color: '#402970' }}>
+                  {formatPrice(orderResult.total_lkr, (orderIntent?.currency || 'LKR') as Currency)}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => setPaymentModalOpen(true)}
+              className="mt-2 w-full py-1.5 rounded-lg text-[10px] font-mono font-bold text-center cursor-pointer transition-all"
+              style={{ background: 'linear-gradient(135deg, #C9A84C 0%, #E8C96B 100%)', color: '#fff', boxShadow: '0 1px 4px rgba(201,168,76,0.25)' }}
+            >
+              Pay Now
+            </button>
+          </div>
+        )}
+
         {/* Collapse toggle — right-aligned */}
         <div className="mt-auto pt-3 flex justify-end px-1">
           <button
@@ -1810,6 +1859,7 @@ export default function App() {
             onQuickReply={handleSendMessage as any}
             cartSize={cart.length}
             onComposerFocusChange={setComposerFocused}
+            onPay={() => setPaymentModalOpen(true)}
           />
         )}
         </div>
@@ -1838,6 +1888,7 @@ export default function App() {
               onRenewOrder={handleRenewOrder}
               isDemoMode={false}
               orderIntent={orderIntent}
+              onPay={() => { setIsCartOpen(false); setPaymentModalOpen(true); }}
             />
           </div>
         </div>
@@ -1897,6 +1948,24 @@ export default function App() {
           lang={language}
         />
       )}
+
+      {/* ── Payment Modal (in-app checkout) ─────────────────────────────── */}
+      <PaymentModal
+        order={orderResult ?? { order_ref: '', order_id: '', pay_url: '', total_lkr: 0, expires_at: '' }}
+        cart={cart}
+        currency={orderIntent?.currency || 'LKR'}
+        deliveryMeta={orderIntent ? {
+          recipientName: orderIntent.recipient_name,
+          deliveryDate:  orderIntent.delivery_date,
+          city:          orderIntent.city_name,
+          giftMessage:   orderIntent.gift_message,
+          occasion:      orderIntent.occasion,
+          senderName:    orderIntent.sender_name,
+        } : undefined}
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        lang={language}
+      />
 
       {/* ── New Conversation FAB (always visible when there are messages) ─── */}
       {messages.length > 0 && (

@@ -44,6 +44,8 @@ interface ChatSectionProps {
   cartSize?: number;
   /** Mobile only: notify parent when the composer gains/loses focus, so the bottom tab bar can tuck away while typing */
   onComposerFocusChange?: (focused: boolean) => void;
+  /** Open in-app payment modal for order checkout */
+  onPay?: () => void;
 }
 
 type ChatPhase = 'discovery' | 'browsing' | 'cart' | 'postorder';
@@ -96,7 +98,7 @@ const isProgressMessage = (content: string): boolean => {
 // ── Component ───────────────────────────────────────────────────────────────
 export default function ChatSection({
   messages, isStreaming, onSendMessage, onSendVoice, onRetryMessage, onAddMessage, onUpdateMessage,
-  onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0, onComposerFocusChange,
+  onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0, onComposerFocusChange, onPay,
 }: ChatSectionProps) {
   const [inputText, setInputText] = useState('');
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -607,6 +609,7 @@ export default function ChatSection({
                               senderName:    msg.order_intent.sender_name,
                             } : undefined}
                             lang={lang}
+                            onPay={onPay}
                           />
                         </div>
                       )}
