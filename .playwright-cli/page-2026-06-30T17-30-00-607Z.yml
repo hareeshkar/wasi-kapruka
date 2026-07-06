@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e101]
+      - generic [ref=e6]: WASI
+    - navigation [ref=e7]:
+      - button "New Chat" [ref=e130] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e11]: New Chat
+      - button "EN English" [active] [ref=e131] [cursor=pointer]:
+        - generic [ref=e13]:
+          - img [ref=e14]
+          - generic [ref=e17]: EN
+        - generic [ref=e18]: English
+      - button "Sign In" [ref=e132] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e24]: Sign In
+      - button "Cart" [ref=e133] [cursor=pointer]:
+        - img [ref=e27]
+        - generic [ref=e30]: Cart
+    - button "Collapse sidebar" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+  - main [ref=e37]:
+    - generic [ref=e40]:
+      - generic [ref=e43]:
+        - generic [ref=e46]: Kapruka Shopping Bestie
+        - heading "Hi, Wasi" [level=1] [ref=e134]
+        - generic [ref=e49]:
+          - generic [ref=e50]: Let's find
+          - generic [ref=e52]: the perfect gift
+      - generic [ref=e53]:
+        - button "Gifts & Hampers Curated bundles, wrapped & ready" [ref=e135] [cursor=pointer]:
+          - img [ref=e56]
+          - heading "Gifts & Hampers" [level=3] [ref=e136]
+          - paragraph [ref=e61]: Curated bundles, wrapped & ready
+        - button "Cakes & Sweets Freshly baked, same-day delivery" [ref=e137] [cursor=pointer]:
+          - img [ref=e64]
+          - heading "Cakes & Sweets" [level=3] [ref=e138]
+          - paragraph [ref=e68]: Freshly baked, same-day delivery
+        - button "Electronics & Gadgets Phones, laptops & accessories" [ref=e139] [cursor=pointer]:
+          - img [ref=e71]
+          - heading "Electronics & Gadgets" [level=3] [ref=e125]
+          - paragraph [ref=e74]: Phones, laptops & accessories
+        - button "Groceries & Essentials Rice, dal, spices & more" [ref=e140] [cursor=pointer]:
+          - img [ref=e77]
+          - heading "Groceries & Essentials" [level=3] [ref=e141]
+          - paragraph [ref=e81]: Rice, dal, spices & more
+      - generic [ref=e82]:
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - button "New conversation" [ref=e86] [cursor=pointer]:
+              - img [ref=e87]
+            - button "Upload image" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+          - textbox "Ask Wasi anything…" [ref=e142]
+          - button [ref=e95] [cursor=pointer]
+        - button "Sign in to save your history" [ref=e143] [cursor=pointer]

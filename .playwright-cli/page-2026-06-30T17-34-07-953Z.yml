@@ -1,0 +1,51 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e101]
+      - generic [ref=e6]: WASI
+    - navigation [ref=e7]:
+      - button "New Chat" [ref=e130] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e11]: New Chat
+      - button "EN English" [ref=e131] [cursor=pointer]:
+        - generic [ref=e13]:
+          - img [ref=e14]
+          - generic [ref=e17]: EN
+        - generic [ref=e18]: English
+      - button "N nimal.perera" [ref=e217] [cursor=pointer]:
+        - generic [ref=e20]: "N"
+        - generic [ref=e24]: nimal.perera
+      - button "Cart" [ref=e133] [cursor=pointer]:
+        - img [ref=e27]
+        - generic [ref=e30]: Cart
+      - button "Sign out" [ref=e224] [cursor=pointer]:
+        - img [ref=e226]
+        - generic [ref=e229]: Sign out
+    - button "Collapse sidebar" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+  - generic [ref=e36]:
+    - main [ref=e37]:
+      - generic [ref=e336]:
+        - generic [ref=e338]:
+          - generic [ref=e340]:
+            - generic [ref=e342]: Hi! Need a birthday gift for my amma — she loves chocolates. Budget around Rs. 5000. Can you deliver to Colombo?
+            - generic [ref=e343]: 11:04 PM
+          - generic [ref=e344]:
+            - img [ref=e346]
+            - generic [ref=e370]: Finding the perfect match
+        - generic [ref=e373]:
+          - generic [ref=e374]:
+            - button "Birthday gift" [ref=e375] [cursor=pointer]
+            - button "Groceries" [ref=e376] [cursor=pointer]
+            - button "I messed up — help" [ref=e377] [cursor=pointer]
+            - button "Track my order" [ref=e378] [cursor=pointer]
+          - generic [ref=e380]:
+            - button "Upload image" [ref=e381] [cursor=pointer]:
+              - img [ref=e382]
+            - textbox "Ask Wasi — type your gift request" [disabled] [ref=e386]:
+              - /placeholder: Wasi is thinking…
+            - button "Voice input" [ref=e387] [cursor=pointer]
+            - button [disabled] [ref=e392]:
+              - img [ref=e393]
+    - button "Start new conversation" [ref=e396] [cursor=pointer]:
+      - img [ref=e397]

@@ -1,0 +1,145 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e101]
+      - generic [ref=e6]: WASI
+    - navigation [ref=e7]:
+      - button "New Chat" [ref=e130] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e11]: New Chat
+      - button "EN English" [ref=e131] [cursor=pointer]:
+        - generic [ref=e13]:
+          - img [ref=e14]
+          - generic [ref=e17]: EN
+        - generic [ref=e18]: English
+      - button "N nimal.perera" [ref=e217] [cursor=pointer]:
+        - generic [ref=e20]: "N"
+        - generic [ref=e24]: nimal.perera
+      - button "Cart" [ref=e133] [cursor=pointer]:
+        - img [ref=e27]
+        - generic [ref=e30]: Cart
+      - button "Sign out" [ref=e224] [cursor=pointer]:
+        - img [ref=e226]
+        - generic [ref=e229]: Sign out
+    - button "Collapse sidebar" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+  - generic [ref=e36]:
+    - main [ref=e37]:
+      - generic [ref=e336]:
+        - generic [ref=e338]:
+          - generic [ref=e340]:
+            - generic [ref=e342]: Hi! Need a birthday gift for my amma — she loves chocolates. Budget around Rs. 5000. Can you deliver to Colombo?
+            - generic [ref=e343]: 11:04 PM
+          - generic [ref=e399]:
+            - img [ref=e401]
+            - generic [ref=e420]:
+              - paragraph [ref=e422]: Searching for chocolate gifts for Amma...
+              - generic [ref=e423]: 11:04 PM
+          - generic [ref=e424]:
+            - img [ref=e426]
+            - generic [ref=e445]:
+              - generic [ref=e446]:
+                - paragraph [ref=e555]: Hi Nimal! Absolutely, I can get that delivered to Colombo for you. Since Amma loves chocolates, here are some lovely options for her birthday.
+                - button "Regenerate" [ref=e450] [cursor=pointer]:
+                  - img [ref=e451]
+                  - text: Regenerate
+                - list "Product results" [ref=e453]:
+                  - listitem [ref=e454]:
+                    - generic [ref=e455] [cursor=pointer]:
+                      - img "All Nuts Mix-12 Piece(java)" [ref=e457]
+                      - generic [ref=e460]: Chocolates
+                      - generic [ref=e461]: Rs.3,600
+                      - generic [ref=e462]:
+                        - heading "All Nuts Mix-12 Piece(java)" [level=3] [ref=e463]
+                        - button "Add to Bundle" [ref=e464]:
+                          - img [ref=e465]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e466]:
+                          - img [ref=e467]
+                          - text: Details
+                  - listitem [ref=e470]:
+                    - generic [ref=e471] [cursor=pointer]:
+                      - img "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [ref=e473]
+                      - generic [ref=e476]: Chocolates
+                      - generic [ref=e477]: Rs.1,250
+                      - generic [ref=e478]:
+                        - heading "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [level=3] [ref=e479]
+                        - button "Add to Bundle" [ref=e480]:
+                          - img [ref=e481]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e482]:
+                          - img [ref=e483]
+                          - text: Details
+                  - listitem [ref=e486]:
+                    - generic [ref=e487] [cursor=pointer]:
+                      - img "Java Cinnamon 10 Pieces Chocolate Box" [ref=e489]
+                      - generic [ref=e492]: Chocolates
+                      - generic [ref=e493]: Rs.3,800
+                      - generic [ref=e494]:
+                        - heading "Java Cinnamon 10 Pieces Chocolate Box" [level=3] [ref=e495]
+                        - button "Add to Bundle" [ref=e496]:
+                          - img [ref=e497]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e498]:
+                          - img [ref=e499]
+                          - text: Details
+                  - listitem [ref=e502]:
+                    - generic [ref=e503] [cursor=pointer]:
+                      - img "Java Assortment Kunafa Truffle Box 12 Pcs" [ref=e505]
+                      - generic [ref=e508]: Chocolates
+                      - generic [ref=e509]: Rs.4,210
+                      - generic [ref=e510]:
+                        - heading "Java Assortment Kunafa Truffle Box 12 Pcs" [level=3] [ref=e511]
+                        - button "Add to Bundle" [ref=e512]:
+                          - img [ref=e513]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e514]:
+                          - img [ref=e515]
+                          - text: Details
+                  - listitem [ref=e518]:
+                    - generic [ref=e519] [cursor=pointer]:
+                      - generic [ref=e523]: Chocolates
+                      - generic [ref=e524]: Rs.3,600
+                      - generic [ref=e525]:
+                        - heading "Assorted 12 Piece Chocolates(java)" [level=3] [ref=e526]
+                        - button "Add to Bundle" [ref=e527]:
+                          - img [ref=e528]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e529]:
+                          - img [ref=e530]
+                          - text: Details
+                  - listitem [ref=e533]:
+                    - generic [ref=e534] [cursor=pointer]:
+                      - generic [ref=e538]: Flowers
+                      - generic [ref=e539]: Rs.4,830
+                      - generic [ref=e540]:
+                        - heading "Java Rose Of My Heart Chocolate With Assorted Handmade Card" [level=3] [ref=e541]
+                        - button "Add to Bundle" [ref=e542]:
+                          - img [ref=e543]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e544]:
+                          - img [ref=e545]
+                          - text: Details
+              - generic [ref=e548]: 11:04 PM
+          - generic [ref=e557]:
+            - generic [ref=e559]: හායි! මට birthday cake එකක් ඕනේ. Kandy එකෙන් delivery කරන්න පුළුවන්ද?
+            - generic [ref=e560]: 11:05 PM
+          - generic [ref=e561]:
+            - img [ref=e563]
+            - generic [ref=e587]: Finding the perfect match
+        - generic [ref=e373]:
+          - generic [ref=e374]:
+            - button "Add the first one" [ref=e549] [cursor=pointer]
+            - button "Show more options" [ref=e550] [cursor=pointer]
+            - button "Tell me more" [ref=e551] [cursor=pointer]
+            - button "Cheaper ones please" [ref=e552] [cursor=pointer]
+          - generic [ref=e380]:
+            - button "Upload image" [ref=e381] [cursor=pointer]:
+              - img [ref=e382]
+            - textbox "Ask Wasi — type your gift request" [disabled] [ref=e386]:
+              - /placeholder: Wasi is thinking…
+            - button "Voice input" [ref=e387] [cursor=pointer]
+            - button [disabled] [ref=e392]:
+              - img [ref=e393]
+    - button "Start new conversation" [ref=e396] [cursor=pointer]:
+      - img [ref=e397]

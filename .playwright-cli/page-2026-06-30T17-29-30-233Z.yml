@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e101]
+      - generic [ref=e6]: WASI
+    - navigation [ref=e7]:
+      - button "අලුත් Chat" [ref=e102] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e11]: අලුත් Chat
+      - button "සි සිංහල" [active] [ref=e103] [cursor=pointer]:
+        - generic [ref=e13]:
+          - img [ref=e14]
+          - generic [ref=e17]: සි
+        - generic [ref=e18]: සිංහල
+      - button "Sign In" [ref=e19] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e24]: Sign In
+      - button "Cart" [ref=e25] [cursor=pointer]:
+        - img [ref=e27]
+        - generic [ref=e30]: Cart
+    - button "Collapse sidebar" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+  - main [ref=e37]:
+    - generic [ref=e40]:
+      - generic [ref=e43]:
+        - generic [ref=e46]: ඔයාගේ Kapruka Shopping Bestie
+        - heading "හායි, Wasi" [level=1] [ref=e104]
+        - generic [ref=e49]:
+          - generic [ref=e50]: හොයමු
+          - generic [ref=e52]: perfect gift එක
+      - generic [ref=e53]:
+        - button "තෑගි සහ Hampers Pack කරලා ready, deliver කරන්නත් ready" [ref=e105] [cursor=pointer]:
+          - img [ref=e56]
+          - heading "තෑගි සහ Hampers" [level=3] [ref=e106]
+          - paragraph [ref=e61]: Pack කරලා ready, deliver කරන්නත් ready
+        - button "Cakes සහ Sweets Fresh bake කරලා, same day deliver" [ref=e107] [cursor=pointer]:
+          - img [ref=e64]
+          - heading "Cakes සහ Sweets" [level=3] [ref=e108]
+          - paragraph [ref=e68]: Fresh bake කරලා, same day deliver
+        - button "Electronics සහ Gadgets Phones, laptops සහ accessories" [ref=e109] [cursor=pointer]:
+          - img [ref=e71]
+          - heading "Electronics සහ Gadgets" [level=3] [ref=e110]
+          - paragraph [ref=e74]: Phones, laptops සහ accessories
+        - button "Groceries සහ Essentials හාල්, පරිප්පු, කුළුබඩු සහ තවත්" [ref=e111] [cursor=pointer]:
+          - img [ref=e77]
+          - heading "Groceries සහ Essentials" [level=3] [ref=e112]
+          - paragraph [ref=e81]: හාල්, පරිප්පු, කුළුබඩු සහ තවත්
+      - generic [ref=e82]:
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - button "New conversation" [ref=e86] [cursor=pointer]:
+              - img [ref=e87]
+            - button "Upload image" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+          - textbox "Wasi ගෙන් ඕනෑ දෙයක් අහන්න…" [ref=e113]
+          - button [ref=e95] [cursor=pointer]
+        - button "History save කරන්න sign in වෙන්න" [ref=e114] [cursor=pointer]

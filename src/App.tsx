@@ -783,6 +783,29 @@ export default function App() {
 
   // Main conversational submission hook
   const handleSendMessage = async (text: string, images?: Array<{ data: string; mimeType: string }>) => {
+    // Detect currency preference from user message
+    const currencyMatch = text.match(/\b(usd|dollars?|gbp|pounds?|eur|euros?|aud)\b/i);
+    if (currencyMatch) {
+      const word = currencyMatch[1].toLowerCase();
+      const detected = word.startsWith('usd') || word.startsWith('dollar') ? 'USD'
+        : word.startsWith('gbp') || word.startsWith('pound') ? 'GBP'
+        : word.startsWith('eur') || word.startsWith('euro') ? 'EUR'
+        : word.startsWith('aud') ? 'AUD'
+        : null;
+      if (detected) setUserCurrency(detected);
+    }
+    // Also detect "I'm from [country]" pattern
+    const countryMatch = text.match(/\b(?:from|in|in the)\s+(US|USA|United States|UK|United Kingdom|Britain|Australia|Europe|Dubai|Singapore)\b/i);
+    if (countryMatch) {
+      const country = countryMatch[1].toLowerCase();
+      const detected = country.includes('us') || country.includes('united states') ? 'USD'
+        : country.includes('uk') || country.includes('united kingdom') || country.includes('britain') ? 'GBP'
+        : country.includes('australia') ? 'AUD'
+        : country.includes('europe') ? 'EUR'
+        : null;
+      if (detected) setUserCurrency(detected);
+    }
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -1895,6 +1918,7 @@ export default function App() {
               isDemoMode={false}
               orderIntent={orderIntent}
               onPay={() => { setIsCartOpen(false); setPaymentModalOpen(true); }}
+              preferredCurrency={userCurrency}
             />
           </div>
         </div>

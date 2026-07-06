@@ -1,0 +1,161 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e6]
+      - generic [ref=e7]: WASI
+    - navigation [ref=e8]:
+      - button "New Chat" [ref=e9] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e12]: New Chat
+      - button "EN English" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - generic [ref=e18]: EN
+        - generic [ref=e19]: English
+      - button "N nimal.perera" [ref=e137] [cursor=pointer]:
+        - generic [ref=e21]: "N"
+        - generic [ref=e25]: nimal.perera
+      - button "1 Cart" [ref=e426] [cursor=pointer]:
+        - generic [ref=e27]:
+          - img [ref=e28]
+          - generic [ref=e427]: "1"
+        - generic [ref=e31]: Cart
+      - button "Sign out" [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: Sign out
+    - button "Collapse sidebar" [ref=e33] [cursor=pointer]:
+      - img [ref=e34]
+  - generic [ref=e37]:
+    - main [ref=e38]:
+      - generic [ref=e148]:
+        - generic [ref=e150]:
+          - generic [ref=e152]:
+            - generic [ref=e154]: Hi Nimal here! Need a birthday gift for my amma — she loves chocolates. Budget around Rs. 5000. Can you deliver to Colombo?
+            - generic [ref=e155]: 11:08 PM
+          - generic [ref=e156]:
+            - img [ref=e158]
+            - generic [ref=e177]:
+              - paragraph [ref=e179]: Searching Kapruka for birthday chocolates for Amma...
+              - generic [ref=e180]: 11:08 PM
+          - generic [ref=e181]:
+            - img [ref=e183]
+            - generic [ref=e202]:
+              - generic [ref=e203]:
+                - generic [ref=e205]:
+                  - paragraph [ref=e475]: Hi Nimal, happy to help you find something sweet for Amma!
+                  - paragraph [ref=e476]: "Since you're in Colombo, we can definitely get these delivered to her. Here are some lovely chocolate options within your budget:"
+                - button "Regenerate" [ref=e208] [cursor=pointer]:
+                  - img [ref=e209]
+                  - text: Regenerate
+                - list "Product results" [ref=e211]:
+                  - listitem [ref=e212]:
+                    - generic [ref=e213] [cursor=pointer]:
+                      - img "Glitter Hearts Chocolate Box" [ref=e215]
+                      - generic [ref=e218]: Chocolates
+                      - generic [ref=e219]: Rs.3,500
+                      - generic [ref=e220]:
+                        - heading "Glitter Hearts Chocolate Box" [level=3] [ref=e221]
+                        - button "Added" [disabled] [ref=e430]:
+                          - img [ref=e431]
+                          - text: Added
+                        - button "Details" [ref=e224]:
+                          - img [ref=e225]
+                          - text: Details
+                  - listitem [ref=e228]:
+                    - generic [ref=e229] [cursor=pointer]:
+                      - img "All Nuts Mix-12 Piece(java)" [ref=e231]
+                      - generic [ref=e234]: Chocolates
+                      - generic [ref=e235]: Rs.3,600
+                      - generic [ref=e236]:
+                        - heading "All Nuts Mix-12 Piece(java)" [level=3] [ref=e237]
+                        - button "Add to Bundle" [ref=e238]:
+                          - img [ref=e239]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e240]:
+                          - img [ref=e241]
+                          - text: Details
+                  - listitem [ref=e244]:
+                    - generic [ref=e245] [cursor=pointer]:
+                      - img "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [ref=e247]
+                      - generic [ref=e250]: Chocolates
+                      - generic [ref=e251]: Rs.1,250
+                      - generic [ref=e252]:
+                        - heading "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [level=3] [ref=e253]
+                        - button "Add to Bundle" [ref=e254]:
+                          - img [ref=e255]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e256]:
+                          - img [ref=e257]
+                          - text: Details
+                  - listitem [ref=e260]:
+                    - generic [ref=e261] [cursor=pointer]:
+                      - img "Java Cinnamon 10 Pieces Chocolate Box" [ref=e263]
+                      - generic [ref=e266]: Chocolates
+                      - generic [ref=e267]: Rs.3,800
+                      - generic [ref=e268]:
+                        - heading "Java Cinnamon 10 Pieces Chocolate Box" [level=3] [ref=e269]
+                        - button "Add to Bundle" [ref=e270]:
+                          - img [ref=e271]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e272]:
+                          - img [ref=e273]
+                          - text: Details
+              - generic [ref=e276]: 11:08 PM
+          - generic [ref=e434]:
+            - generic [ref=e436]: "Added to bundle: \"Glitter Hearts Chocolate Box\" — Rs.3,500"
+            - generic [ref=e437]: 11:09 PM
+          - generic [ref=e438]:
+            - img [ref=e440]
+            - generic [ref=e459]:
+              - generic [ref=e460]:
+                - paragraph [ref=e477]: Great choice, Nimal—Amma will surely love those glittery chocolates! Would you like me to add a greeting card with a personalized message for her birthday? It’s a lovely touch that really makes the gift feel special for Amma.
+                - button "Regenerate" [ref=e464] [cursor=pointer]:
+                  - img [ref=e465]
+                  - text: Regenerate
+              - generic [ref=e467]: 11:09 PM
+          - generic [ref=e479]:
+            - generic [ref=e481]: Show me the details of that Glitter Hearts Chocolate Box
+            - generic [ref=e482]: 11:09 PM
+          - generic [ref=e483]:
+            - img [ref=e485]
+            - generic [ref=e504]:
+              - generic [ref=e505]:
+                - paragraph [ref=e508]: It's a beautiful selection—perfect for a birthday surprise. Would you like to lock this in and proceed with delivery details, or shall I find a small bunch of flowers to pair with it?
+                - button "Regenerate" [ref=e509] [cursor=pointer]:
+                  - img [ref=e510]
+                  - text: Regenerate
+              - generic [ref=e512]: 11:09 PM
+          - generic [ref=e513]:
+            - img [ref=e515]
+            - generic [ref=e534]:
+              - generic [ref=e535]:
+                - button "Regenerate" [ref=e536] [cursor=pointer]:
+                  - img [ref=e537]
+                  - text: Regenerate
+                - generic [ref=e540]:
+                  - img "Glitter Hearts Chocolate Box" [ref=e541]
+                  - generic [ref=e542]:
+                    - paragraph [ref=e543]: Glitter Hearts Chocolate Box
+                    - paragraph [ref=e544]: Chocolates
+                    - paragraph [ref=e545]: Rs.3,500
+                    - paragraph [ref=e546]: "The Glitter Hearts Chocolate Box is a delightful treat filled with Barry Callebaut glitter heart chocolates , perfect for loved ones. Elegantly presented in a black box, this special assortment is sure to impress. Chocolates: Barry Callebaut glitter heart chocolates Presentation: Stylish black box for a classy look Perfect for: Gift-giving, celebrations , or a sweet treat for yourself Available at Kapruka: Conveniently order online in Sri Lanka Enjoy these delightful chocolates and surprise someone special with this sweet gift."
+                    - generic [ref=e547]:
+                      - button "Add to bundle" [ref=e548] [cursor=pointer]
+                      - button "Full details" [ref=e549] [cursor=pointer]
+              - generic [ref=e550]: 11:09 PM
+        - generic [ref=e278]:
+          - generic [ref=e279]:
+            - button "Checkout now" [ref=e468] [cursor=pointer]
+            - button "Add a gift message" [ref=e469] [cursor=pointer]
+            - button "Check delivery" [ref=e470] [cursor=pointer]
+            - button "Remove last item" [ref=e471] [cursor=pointer]
+          - generic [ref=e285]:
+            - button "Upload image" [ref=e286] [cursor=pointer]:
+              - img [ref=e287]
+            - textbox "Ask Wasi — type your gift request" [ref=e291]:
+              - /placeholder: Describe your gift or just say the occasion…
+            - button "Voice input" [ref=e292] [cursor=pointer]
+            - button [disabled] [ref=e297]:
+              - img [ref=e298]
+    - button "Start new conversation" [ref=e301] [cursor=pointer]:
+      - img [ref=e302]

@@ -1,0 +1,148 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e6]
+      - generic [ref=e7]: WASI
+    - navigation [ref=e8]:
+      - button "New Chat" [ref=e9] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e12]: New Chat
+      - button "EN English" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - generic [ref=e18]: EN
+        - generic [ref=e19]: English
+      - button "N nimal.perera" [ref=e137] [cursor=pointer]:
+        - generic [ref=e21]: "N"
+        - generic [ref=e25]: nimal.perera
+      - button "Cart" [ref=e1683] [cursor=pointer]:
+        - img [ref=e28]
+        - generic [ref=e31]: Cart
+      - button "Sign out" [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: Sign out
+    - button "Collapse sidebar" [ref=e33] [cursor=pointer]:
+      - img [ref=e34]
+  - generic [ref=e37]:
+    - main [ref=e38]:
+      - generic [ref=e1813]:
+        - generic [ref=e1815]:
+          - generic [ref=e1817]:
+            - generic [ref=e1819]: I need a birthday gift for my amma — she loves chocolates. Budget around Rs. 5000
+            - generic [ref=e1820]: 11:17 PM
+          - generic [ref=e1897]:
+            - generic [ref=e1899]: Show me chocolates under Rs. 3000
+            - generic [ref=e1900]: 11:19 PM
+          - generic [ref=e1929]:
+            - img [ref=e1931]
+            - generic [ref=e1950]:
+              - paragraph [ref=e1952]: Searching for chocolates for Amma...
+              - generic [ref=e1953]: 11:20 PM
+          - generic [ref=e1954]:
+            - img [ref=e1956]
+            - generic [ref=e1975]:
+              - generic [ref=e1976]:
+                - paragraph [ref=e2083]: Nimal, here are some thoughtful chocolate options for Amma's birthday under Rs. 3,000!
+                - button "Regenerate" [ref=e1980] [cursor=pointer]:
+                  - img [ref=e1981]
+                  - text: Regenerate
+                - list "Product results" [ref=e1983]:
+                  - listitem [ref=e1984]:
+                    - generic [ref=e1985] [cursor=pointer]:
+                      - img "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [ref=e1987]
+                      - generic [ref=e1990]: Chocolates
+                      - generic [ref=e1991]: Rs.1,250
+                      - generic [ref=e1992]:
+                        - heading "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [level=3] [ref=e1993]
+                        - button "Add to Bundle" [ref=e1994]:
+                          - img [ref=e1995]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e1996]:
+                          - img [ref=e1997]
+                          - text: Details
+                  - listitem [ref=e2000]:
+                    - generic [ref=e2001] [cursor=pointer]:
+                      - img "Java Super Dad 10 Piece Box" [ref=e2003]
+                      - generic [ref=e2006]: Chocolates
+                      - generic [ref=e2007]: Rs.3,000
+                      - generic [ref=e2008]:
+                        - heading "Java Super Dad 10 Piece Box" [level=3] [ref=e2009]
+                        - button "Add to Bundle" [ref=e2010]:
+                          - img [ref=e2011]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2012]:
+                          - img [ref=e2013]
+                          - text: Details
+                  - listitem [ref=e2016]:
+                    - generic [ref=e2017] [cursor=pointer]:
+                      - 'img "` Sexy Girl` 8 Piece Chocolate(java)" [ref=e2019]'
+                      - generic [ref=e2022]: Chocolates
+                      - generic [ref=e2023]: Rs.2,400
+                      - generic [ref=e2024]:
+                        - 'heading "` Sexy Girl` 8 Piece Chocolate(java)" [level=3] [ref=e2025]'
+                        - button "Add to Bundle" [ref=e2026]:
+                          - img [ref=e2027]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2028]:
+                          - img [ref=e2029]
+                          - text: Details
+                  - listitem [ref=e2032]:
+                    - generic [ref=e2033] [cursor=pointer]:
+                      - img "Java Gold Diamonds Big Heart With 08 Piece Pebbles Chocolate" [ref=e2035]
+                      - generic [ref=e2038]: Chocolates
+                      - generic [ref=e2039]: Rs.2,670
+                      - generic [ref=e2040]:
+                        - heading "Java Gold Diamonds Big Heart With 08 Piece Pebbles Chocolate" [level=3] [ref=e2041]
+                        - button "Add to Bundle" [ref=e2042]:
+                          - img [ref=e2043]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2044]:
+                          - img [ref=e2045]
+                          - text: Details
+                  - listitem [ref=e2048]:
+                    - generic [ref=e2049] [cursor=pointer]:
+                      - generic [ref=e2053]: Chocolates
+                      - generic [ref=e2054]: Rs.1,970
+                      - generic [ref=e2055]:
+                        - heading "Java Plain Dark Chocolate Slab" [level=3] [ref=e2056]
+                        - button "Add to Bundle" [ref=e2057]:
+                          - img [ref=e2058]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2059]:
+                          - img [ref=e2060]
+                          - text: Details
+                  - listitem [ref=e2063]:
+                    - generic [ref=e2064] [cursor=pointer]:
+                      - generic [ref=e2068]: Chocolates
+                      - generic [ref=e2069]: Rs.2,620
+                      - generic [ref=e2070]:
+                        - 'heading "Java `MWAH` 12 Piece Chocolate Box" [level=3] [ref=e2071]'
+                        - button "Add to Bundle" [ref=e2072]:
+                          - img [ref=e2073]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2074]:
+                          - img [ref=e2075]
+                          - text: Details
+              - generic [ref=e2078]: 11:20 PM
+          - generic [ref=e2085]:
+            - generic [ref=e2087]: Tell me more
+            - generic [ref=e2088]: 11:20 PM
+          - generic [ref=e2089]:
+            - img [ref=e2091]
+            - generic [ref=e2115]: Finding the perfect match
+        - generic [ref=e1850]:
+          - generic [ref=e1851]:
+            - button "Add the first one" [ref=e2079] [cursor=pointer]
+            - button "Show more options" [ref=e2080] [cursor=pointer]
+            - button "Tell me more" [active] [ref=e2081] [cursor=pointer]
+            - button "Cheaper ones please" [ref=e2082] [cursor=pointer]
+          - generic [ref=e1857]:
+            - button "Upload image" [ref=e1858] [cursor=pointer]:
+              - img [ref=e1859]
+            - textbox "Ask Wasi — type your gift request" [disabled] [ref=e1863]:
+              - /placeholder: Wasi is thinking…
+            - button "Voice input" [ref=e1864] [cursor=pointer]
+            - button [disabled] [ref=e1869]:
+              - img [ref=e1870]
+    - button "Start new conversation" [ref=e1873] [cursor=pointer]:
+      - img [ref=e1874]

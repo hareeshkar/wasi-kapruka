@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e6]
+      - generic [ref=e7]: WASI
+    - navigation [ref=e8]:
+      - button "புதிய Chat" [ref=e115] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e12]: புதிய Chat
+      - button "த தமிழ்" [active] [ref=e116] [cursor=pointer]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - generic [ref=e18]: த
+        - generic [ref=e19]: தமிழ்
+      - button "உள்நுழை" [ref=e117] [cursor=pointer]:
+        - img [ref=e22]
+        - generic [ref=e25]: உள்நுழை
+      - button "கார்ட்" [ref=e118] [cursor=pointer]:
+        - img [ref=e28]
+        - generic [ref=e31]: கார்ட்
+    - button "Collapse sidebar" [ref=e33] [cursor=pointer]:
+      - img [ref=e34]
+  - main [ref=e38]:
+    - generic [ref=e41]:
+      - generic [ref=e44]:
+        - generic [ref=e47]: உங்கள் Kapruka Shopping நண்பன்
+        - heading "ஹாய், Wasi" [level=1] [ref=e119]
+        - generic [ref=e50]:
+          - generic [ref=e51]: தேடலாம்
+          - generic [ref=e53]: birthday surprise ஒண்டு
+      - generic [ref=e54]:
+        - button "பரிசுகளும் Hamper-களும் அழகாக wrap பண்ணி ready-யா இருக்கு" [ref=e120] [cursor=pointer]:
+          - img [ref=e57]
+          - heading "பரிசுகளும் Hamper-களும்" [level=3] [ref=e121]
+          - paragraph [ref=e62]: அழகாக wrap பண்ணி ready-யா இருக்கு
+        - button "Cakes & இனிப்புகள் Fresh-ஆ bake பண்ணி, அன்றே deliver" [ref=e122] [cursor=pointer]:
+          - img [ref=e65]
+          - heading "Cakes & இனிப்புகள்" [level=3] [ref=e123]
+          - paragraph [ref=e69]: Fresh-ஆ bake பண்ணி, அன்றே deliver
+        - button "Electronics & Gadgets Phone, laptop, accessories எல்லாமே" [ref=e124] [cursor=pointer]:
+          - img [ref=e72]
+          - heading "Electronics & Gadgets" [level=3] [ref=e125]
+          - paragraph [ref=e75]: Phone, laptop, accessories எல்லாமே
+        - button "Grocery & அத்தியாவசியங்கள் அரிசி, பருப்பு, மசாலா இன்னும் நிறைய" [ref=e126] [cursor=pointer]:
+          - img [ref=e78]
+          - heading "Grocery & அத்தியாவசியங்கள்" [level=3] [ref=e127]
+          - paragraph [ref=e82]: அரிசி, பருப்பு, மசாலா இன்னும் நிறைய
+      - generic [ref=e83]:
+        - generic [ref=e85]:
+          - generic [ref=e86]:
+            - button "New conversation" [ref=e87] [cursor=pointer]:
+              - img [ref=e88]
+            - button "Upload image" [ref=e89] [cursor=pointer]:
+              - img [ref=e90]
+          - textbox "Wasi-கிட்ட எதுவும் கேளு…" [ref=e128]
+          - button [ref=e96] [cursor=pointer]
+        - button "history save ஆக sign in பண்ணு" [ref=e129] [cursor=pointer]

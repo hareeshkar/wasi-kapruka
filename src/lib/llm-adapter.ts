@@ -297,7 +297,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
         in_stock_only: { type: 'boolean', description: 'ALWAYS pass true — filters out unavailable items' },
         sort: { type: 'string', description: '"bestseller" (default for browsing) | "price_asc" | "price_desc" when user asks by price' },
         cursor: { type: 'string', description: 'Pagination token from a previous search\'s next_cursor — max 3 pages, then refine the query instead' },
-        currency: { type: 'string', description: 'Price currency: LKR (default) | USD | GBP | AUD | CAD | EUR — use when the buyer is abroad / mentions foreign currency' }
+        currency: { type: 'string', description: 'Price currency: LKR (default) | USD | GBP | AUD | EUR — use when the buyer is abroad / mentions foreign currency' }
       },
       required: ['q']
     }
@@ -310,7 +310,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
       properties: {
         // LIVE MCP PYDANTIC PARAM: product_id (NOT product_code)
         product_id: { type: 'string', description: 'Product id from kapruka_search_products results (e.g. "CAKE00KA002034")' },
-        currency: { type: 'string', description: 'Price currency: LKR (default) | USD | GBP | AUD | CAD | EUR' }
+        currency: { type: 'string', description: 'Price currency: LKR (default) | USD | GBP | AUD | EUR' }
       },
       required: ['product_id']
     }
@@ -400,7 +400,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
           required: ['name']
         },
         gift_message: { type: 'string', description: 'Optional gift card message (max 300 chars)' },
-        currency: { type: 'string', description: 'LKR (default) | USD | GBP | AUD | CAD | EUR' }
+        currency: { type: 'string', description: 'LKR (default) | USD | GBP | AUD | EUR' }
       },
       required: ['cart', 'recipient', 'delivery', 'sender']
     }
@@ -434,7 +434,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
         delivery_instructions: { type: 'string', description: 'Gate code, buzzer, access notes (max 250 chars)' },
         anonymous: { type: 'boolean', description: 'true if user says "anonymous", "surprise", "don\'t show my name"' },
         order_mode: { type: 'string', description: 'gift (default) | self — set to self when user says "it\'s for me", "my own gift", "I\'m the recipient"' },
-        currency: { type: 'string', description: 'Display currency: LKR (default) | USD | GBP | AUD | CAD | EUR — use when the buyer is abroad' }
+        currency: { type: 'string', description: 'Display currency: LKR (default) | USD | GBP | AUD | EUR — use when the buyer is abroad' }
       },
       required: []
     }
@@ -448,7 +448,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
         product_id: { type: 'string', description: 'Product id from kapruka_search_products result' },
         product_name: { type: 'string', description: 'Product name for on-screen confirmation' },
         price_lkr: { type: 'number', description: 'Product price (in the currency the user is viewing)' },
-        currency: { type: 'string', description: 'Price currency: LKR (default) | USD | GBP | AUD | CAD | EUR — match the currency the user is viewing' },
+        currency: { type: 'string', description: 'Price currency: LKR (default) | USD | GBP | AUD | EUR — match the currency the user is viewing' },
         image_url: { type: 'string', description: 'Product image URL' },
         category: { type: 'string', description: 'Product category (Cakes, Flowers, Chocolates, Hampers etc)' },
         variant_id: { type: 'string', description: 'Variant id if user picked variant' },
@@ -586,7 +586,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
 
 IMPORTANT: This tool converts the ENTIRE cart to the target currency. The MCP returns live-converted prices using Kapruka's current exchange rates. You will receive converted item prices and a total. Use these EXACT values when quoting prices to the user — do NOT manually convert or guess exchange rates.
 
-Supported currencies: USD, GBP, AUD, CAD, EUR.
+Supported currencies: USD, GBP, AUD, EUR.
 
 The tool returns:
 - items: each cart item with converted_price in the target currency
@@ -603,7 +603,7 @@ Tamil: "idhu dollar-la evlo", "maara vilai"`,
       properties: {
         currency: {
           type: 'string',
-          description: 'Target currency code: USD | GBP | AUD | CAD | EUR'
+          description: 'Target currency code: USD | GBP | AUD | EUR'
         }
       },
       required: ['currency']

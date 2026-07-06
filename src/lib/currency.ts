@@ -3,26 +3,28 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Currency-Aware Price Formatting for Wasi Concierge
  *
- * Kapruka MCP supports 6 currencies: LKR, USD, GBP, AUD, CAD, EUR.
+ * Kapruka MCP supports 5 currencies: LKR, USD, GBP, AUD, EUR.
  * The MCP handles conversion server-side — pass currency param to search/detail
  * and the amount comes back converted. This utility formats the display.
  *
- * Evidence (verified via live MCP calls):
- *   - currency=GBP → price.amount = 1.46 (GBP), price.currency = "GBP"
- *   - currency=LKR → price.amount = 1250 (LKR), price.currency = "LKR"
+ * Verified via live MCP calls (2026-07-06):
+ *   - currency=USD → price = 12.96 USD
+ *   - currency=GBP → price = 9.66 GBP
+ *   - currency=EUR → price = 11.17 EUR
+ *   - currency=AUD → price = 18.27 AUD
+ *   - currency=CAD → ERROR: invalid_currency (NOT supported)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-export type Currency = 'LKR' | 'USD' | 'GBP' | 'AUD' | 'CAD' | 'EUR';
+export type Currency = 'LKR' | 'USD' | 'GBP' | 'AUD' | 'EUR';
 
-export const SUPPORTED_CURRENCIES: Currency[] = ['LKR', 'USD', 'GBP', 'AUD', 'CAD', 'EUR'];
+export const SUPPORTED_CURRENCIES: Currency[] = ['LKR', 'USD', 'GBP', 'AUD', 'EUR'];
 
 const CURRENCY_CONFIG: Record<Currency, { symbol: string; prefix: boolean; locale: string; name: string }> = {
   LKR: { symbol: 'Rs.', prefix: true, locale: 'en-LK', name: 'Sri Lankan Rupee' },
   USD: { symbol: '$', prefix: true, locale: 'en-US', name: 'US Dollar' },
   GBP: { symbol: '£', prefix: true, locale: 'en-GB', name: 'British Pound' },
   AUD: { symbol: 'A$', prefix: true, locale: 'en-AU', name: 'Australian Dollar' },
-  CAD: { symbol: 'C$', prefix: true, locale: 'en-CA', name: 'Canadian Dollar' },
   EUR: { symbol: '€', prefix: true, locale: 'de-DE', name: 'Euro' },
 };
 

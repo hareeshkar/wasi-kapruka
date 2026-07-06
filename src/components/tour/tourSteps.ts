@@ -167,7 +167,7 @@ export const TOUR_COPY: Record<TourStepId, Record<TourLang, TourStepContent>> = 
       features: [
         { label: 'In-app payment', detail: 'Kapruka checkout opens inside Wasi — no new tab.' },
         { label: 'Sidebar summary', detail: 'Double-check items, recipient, and total before paying.' },
-        { label: 'Multi-currency', detail: 'See prices in USD, GBP, AUD, CAD, or EUR.' },
+        { label: 'Multi-currency', detail: 'See prices in USD, GBP, AUD, or EUR.' },
         { label: '60-minute price lock', detail: 'Total held while you decide.' },
       ],
     },
@@ -177,7 +177,7 @@ export const TOUR_COPY: Record<TourStepId, Record<TourLang, TourStepContent>> = 
       features: [
         { label: 'ඇතුළත ගෙවීම', detail: 'Kapruka ගෙවීම Wasi තුළම විවෘත වේ — නව ටැබ් නැත.' },
         { label: 'පැතිකඩ සාරාංශය', detail: 'ගෙවීමට පෙර භාණ්ඩ, ලබන්නා, මුළු මුදල පරීක්ෂා කරන්න.' },
-        { label: 'බහු-මුදල්', detail: 'USD, GBP, AUD, CAD හෝ EUR වල මිල බලන්න.' },
+        { label: 'බහු-මුදල්', detail: 'USD, GBP, AUD හෝ EUR වල මිල බලන්න.' },
         { label: 'මිනිත්තු 60ක මිල තහවුරුව', detail: 'තීරණය ගන්නා තුරු මුළු මුදල තහවුරුව.' },
       ],
     },
@@ -187,7 +187,7 @@ export const TOUR_COPY: Record<TourStepId, Record<TourLang, TourStepContent>> = 
       features: [
         { label: 'உள்ளமை கட்டணம்', detail: 'Kapruka கட்டணம் Wasi-க்குள் திறக்கிறது — புதிய தாள் இல்லை.' },
         { label: 'பக்க சுருக்கம்', detail: 'செலுத்துவதற்கு முன் பொருள், பெறுநர், மொத்தத்தை சரிபார்க்கவும்.' },
-        { label: 'பலநாணயம்', detail: 'USD, GBP, AUD, CAD அல்லது EUR-இல் விலைகளைக் காணுங்கள்.' },
+        { label: 'பலநாணயம்', detail: 'USD, GBP, AUD அல்லது EUR-இல் விலைகளைக் காணுங்கள்.' },
         { label: '60-நிமிட விலை பூட்டு', detail: 'முடிவு செய்யும் வரை மொத்தம் பாதுகாக்கப்படும்.' },
       ],
     },

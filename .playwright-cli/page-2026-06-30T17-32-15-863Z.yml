@@ -1,0 +1,89 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e101]
+      - generic [ref=e6]: WASI
+    - navigation [ref=e7]:
+      - button "New Chat" [ref=e130] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e11]: New Chat
+      - button "EN English" [ref=e131] [cursor=pointer]:
+        - generic [ref=e13]:
+          - img [ref=e14]
+          - generic [ref=e17]: EN
+        - generic [ref=e18]: English
+      - button "N nimal.perera" [ref=e217] [cursor=pointer]:
+        - generic [ref=e20]: "N"
+        - generic [ref=e24]: nimal.perera
+      - button "Set up your profile" [ref=e218] [cursor=pointer]:
+        - img [ref=e220]
+        - generic [ref=e222]:
+          - text: Set up your
+          - text: profile
+      - button "Cart" [ref=e133] [cursor=pointer]:
+        - img [ref=e27]
+        - generic [ref=e30]: Cart
+      - button "Sign out" [ref=e224] [cursor=pointer]:
+        - img [ref=e226]
+        - generic [ref=e229]: Sign out
+    - button "Collapse sidebar" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+  - generic [ref=e36]:
+    - main [ref=e37]:
+      - generic [ref=e40]:
+        - generic [ref=e43]:
+          - generic [ref=e46]: Kapruka Shopping Bestie
+          - heading "Hi Nimal, I'm Wasi" [level=1] [ref=e230]
+          - generic [ref=e49]:
+            - generic [ref=e50]: Let's find
+            - generic [ref=e52]: flowers & cakes
+        - generic [ref=e53]:
+          - button "Gifts & Hampers Curated bundles, wrapped & ready" [ref=e135] [cursor=pointer]:
+            - img [ref=e56]
+            - heading "Gifts & Hampers" [level=3] [ref=e136]
+            - paragraph [ref=e61]: Curated bundles, wrapped & ready
+          - button "Cakes & Sweets Freshly baked, same-day delivery" [ref=e137] [cursor=pointer]:
+            - img [ref=e64]
+            - heading "Cakes & Sweets" [level=3] [ref=e138]
+            - paragraph [ref=e68]: Freshly baked, same-day delivery
+          - button "Electronics & Gadgets Phones, laptops & accessories" [ref=e139] [cursor=pointer]:
+            - img [ref=e71]
+            - heading "Electronics & Gadgets" [level=3] [ref=e125]
+            - paragraph [ref=e74]: Phones, laptops & accessories
+          - button "Groceries & Essentials Rice, dal, spices & more" [ref=e140] [cursor=pointer]:
+            - img [ref=e77]
+            - heading "Groceries & Essentials" [level=3] [ref=e141]
+            - paragraph [ref=e81]: Rice, dal, spices & more
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - button "New conversation" [ref=e86] [cursor=pointer]:
+              - img [ref=e87]
+            - button "Upload image" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+          - textbox "Ask Wasi anything…" [ref=e142]
+          - button [ref=e95] [cursor=pointer]
+    - dialog "First up — your gender?" [ref=e235]:
+      - generic [ref=e236]:
+        - progressbar "Step 1 of 3" [ref=e237]
+        - generic [ref=e239]:
+          - img [ref=e240]
+          - generic [ref=e259]:
+            - heading "First up — your gender?" [level=3] [ref=e260]
+            - paragraph [ref=e261]: Step 1 of 3
+        - generic [ref=e263]:
+          - paragraph [ref=e264]: First up — your gender?
+          - paragraph [ref=e265]: Helps Wasi tailor suggestions. Always optional.
+          - radiogroup "Select gender" [ref=e266]:
+            - button "♀️ Female" [active] [ref=e267] [cursor=pointer]:
+              - generic [ref=e268]: ♀️
+              - generic [ref=e269]: Female
+            - button "♂️ Male" [ref=e270] [cursor=pointer]:
+              - generic [ref=e271]: ♂️
+              - generic [ref=e272]: Male
+            - button "⚧️ Non-binary" [ref=e273] [cursor=pointer]:
+              - generic [ref=e274]: ⚧️
+              - generic [ref=e275]: Non-binary
+            - button "🙈 Prefer not to say" [ref=e276] [cursor=pointer]:
+              - generic [ref=e277]: 🙈
+              - generic [ref=e278]: Prefer not to say
+        - button "Skip" [ref=e281] [cursor=pointer]

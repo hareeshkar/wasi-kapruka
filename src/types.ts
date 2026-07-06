@@ -27,7 +27,7 @@ export interface Product {
   images?: string[];           // MCP field: `images[]` (T2) — 2-4 CDN URLs for gallery
   attributes?: ProductAttributes;  // MCP field: `attributes` (T2) — weight, vendor, type
   shipping?: ProductShipping;      // MCP field: `shipping` (T2) — ships_from, international
-  currency?: string;           // MCP currency parameter — LKR, USD, GBP, AUD, CAD, EUR
+  currency?: string;           // MCP currency parameter — LKR, USD, GBP, AUD, EUR
   rating?: number | null;      // MCP field: `rating`
 }
 
@@ -100,7 +100,7 @@ export interface OrderIntent {
   location_type?: 'house' | 'apartment' | 'office' | 'other';
   delivery_instructions?: string;  // max 250 chars; gate codes, buzzer, access notes
   anonymous?: boolean;             // hide sender name on Kapruka gift card
-  currency?: 'LKR' | 'USD' | 'GBP' | 'AUD' | 'CAD' | 'EUR';
+  currency?: 'LKR' | 'USD' | 'GBP' | 'AUD' | 'EUR';
   order_mode?: 'gift' | 'self';    // "it's a gift" (default) vs "it's for me"
 }
 

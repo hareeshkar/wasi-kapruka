@@ -41,6 +41,7 @@ interface CartDrawerProps {
   isDemoMode: boolean;
   orderIntent?: OrderIntent | null;
   onPay?: (order?: any) => void;
+  preferredCurrency?: string;
 }
 
 export default function CartDrawer({
@@ -58,6 +59,7 @@ export default function CartDrawer({
   isDemoMode,
   orderIntent,
   onPay,
+  preferredCurrency,
 }: CartDrawerProps) {
   // Recipient info states
   const [recipientName, setRecipientName] = useState('');
@@ -74,6 +76,13 @@ export default function CartDrawer({
   const [anonymous, setAnonymous] = useState(false);
   const [currency, setCurrency] = useState('LKR');
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+
+  // Sync currency with user's preferred currency from chat context
+  useEffect(() => {
+    if (preferredCurrency && preferredCurrency !== currency) {
+      setCurrency(preferredCurrency);
+    }
+  }, [preferredCurrency]);
 
   // City lookup states
   const [cityQuery, setCityQuery] = useState('');
@@ -769,7 +778,7 @@ export default function CartDrawer({
               </button>
               {showCurrencyPicker && (
                 <div className="absolute right-0 bottom-8 bg-white border border-black/5 rounded-xl shadow-md z-20 overflow-hidden">
-                  {['LKR', 'USD', 'GBP', 'AUD', 'CAD', 'EUR'].map((c) => (
+                  {['LKR', 'USD', 'GBP', 'AUD', 'EUR'].map((c) => (
                     <button
                       key={c}
                       type="button"

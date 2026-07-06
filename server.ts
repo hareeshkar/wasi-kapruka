@@ -402,7 +402,7 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
   ★ "IT'S FOR ME": when user says gift is for themselves, use THEIR OWN name/phone as recipient.
   ★ "I WILL PICKUP": MCP does NOT support pickup orders — always requires a delivery address + city.
     Tell user: "Kapruka doesn't offer pickup via this assistant — I'll set it up for home delivery!"
-  ★ currency: LKR (default) | USD | GBP | AUD | CAD | EUR — pass if user mentions foreign currency
+  ★ currency: LKR (default) | USD | GBP | AUD | EUR — pass if user mentions foreign currency
   returns: {
     order_ref: "ORD-YYYYMMDD-XXXX",   (pre-payment reference)
     checkout_url: "https://kapruka.com/tools/continue_order.jsp?id=XXXXXXXX",
@@ -902,7 +902,7 @@ ORDER MODE DETECTION:
   ★ DIASPORA MODE (buyer is abroad — Kapruka's biggest gifting segment):
     Triggers: "I'm in London/Australia/Dubai…", "in pounds/dollars", "USD", "£", "$",
     "sending home", "mage gedara lankawe" (my home is in Sri Lanka)
-    → Pass currency=USD|GBP|AUD|CAD|EUR to T1 searches AND T2 details — prices
+    → Pass currency=USD|GBP|AUD|EUR to T1 searches AND T2 details — prices
       convert automatically; quote them in the buyer's currency.
     → Pass the same currency to T6 create_order — the pay link charges in it.
     → Delivery is still within Sri Lanka (recipient's address); fees stay LKR-quoted at checkout.
@@ -910,8 +910,8 @@ ORDER MODE DETECTION:
 
   ★ BUDGET CURRENCY CONVERSION (CRITICAL — prevents showing Rs.100 items to a $100 budget):
     MCP natively supports currency conversion via the "currency" parameter.
-    When the user mentions a foreign currency (USD, GBP, EUR, AUD, CAD):
-      1. Pass currency=USD (or GBP/EUR/AUD/CAD) to T1 search AND T2 product details
+    When the user mentions a foreign currency (USD, GBP, EUR, AUD):
+      1. Pass currency=USD (or GBP/EUR/AUD) to T1 search AND T2 product details
       2. Pass max_price=100 in the USER'S currency (NOT converted to LKR)
       3. MCP will return prices converted to that currency and filter by that currency
       4. Pass the SAME currency to T6 create_order — the checkout link charges in it
@@ -1301,7 +1301,7 @@ async function startServer() {
       if (!Array.isArray(items) || !currency) {
         return res.status(400).json({ success: false, error: 'items (array) and currency required' });
       }
-      const supported = ['LKR', 'USD', 'GBP', 'AUD', 'CAD', 'EUR'];
+      const supported = ['LKR', 'USD', 'GBP', 'AUD', 'EUR'];
       if (!supported.includes(currency)) {
         return res.status(400).json({ success: false, error: `Unsupported currency: ${currency}` });
       }
@@ -2079,9 +2079,9 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
           // wasi_convert_currency — fetch live converted prices from MCP for each cart item
           if (toolCall.name === 'wasi_convert_currency') {
             const targetCurrency = toolCall.args?.currency;
-            const supported = ['USD', 'GBP', 'AUD', 'CAD', 'EUR'];
+            const supported = ['USD', 'GBP', 'AUD', 'EUR'];
             if (!targetCurrency || !supported.includes(targetCurrency)) {
-              return { error: `Unsupported currency: ${targetCurrency}. Use USD, GBP, AUD, CAD, or EUR.` };
+              return { error: `Unsupported currency: ${targetCurrency}. Use USD, GBP, AUD, or EUR.` };
             }
             if (cartLines.length === 0) {
               return { error: 'Cart is empty — add items before converting currency.', items: [], total: 0, currency: targetCurrency };

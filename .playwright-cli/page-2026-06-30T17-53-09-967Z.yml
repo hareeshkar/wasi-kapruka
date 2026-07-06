@@ -1,0 +1,270 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "Kapruka" [ref=e6]
+      - generic [ref=e7]: WASI
+    - navigation [ref=e8]:
+      - button "New Chat" [ref=e9] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e12]: New Chat
+      - button "EN English" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]:
+          - img [ref=e15]
+          - generic [ref=e18]: EN
+        - generic [ref=e19]: English
+      - button "N nimal.perera" [ref=e137] [cursor=pointer]:
+        - generic [ref=e21]: "N"
+        - generic [ref=e25]: nimal.perera
+      - button "Cart" [ref=e1683] [cursor=pointer]:
+        - img [ref=e28]
+        - generic [ref=e31]: Cart
+      - button "Sign out" [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: Sign out
+    - button "Collapse sidebar" [ref=e33] [cursor=pointer]:
+      - img [ref=e34]
+  - generic [ref=e37]:
+    - main [ref=e38]:
+      - generic [ref=e1813]:
+        - generic [ref=e1815]:
+          - generic [ref=e1817]:
+            - generic [ref=e1819]: I need a birthday gift for my amma — she loves chocolates. Budget around Rs. 5000
+            - generic [ref=e1820]: 11:17 PM
+          - generic [ref=e1897]:
+            - generic [ref=e1899]: Show me chocolates under Rs. 3000
+            - generic [ref=e1900]: 11:19 PM
+          - generic [ref=e1929]:
+            - img [ref=e1931]
+            - generic [ref=e1950]:
+              - paragraph [ref=e1952]: Searching for chocolates for Amma...
+              - generic [ref=e1953]: 11:20 PM
+          - generic [ref=e1954]:
+            - img [ref=e1956]
+            - generic [ref=e1975]:
+              - generic [ref=e1976]:
+                - paragraph [ref=e2398]: Nimal, here are some thoughtful chocolate options for Amma's birthday under Rs. 3,000!
+                - button "Regenerate" [ref=e1980] [cursor=pointer]:
+                  - img [ref=e1981]
+                  - text: Regenerate
+                - list "Product results" [ref=e1983]:
+                  - listitem [ref=e1984]:
+                    - generic [ref=e1985] [cursor=pointer]:
+                      - img "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [ref=e1987]
+                      - generic [ref=e1990]: Chocolates
+                      - generic [ref=e1991]: Rs.1,250
+                      - generic [ref=e1992]:
+                        - heading "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [level=3] [ref=e1993]
+                        - button "Add to Bundle" [ref=e1994]:
+                          - img [ref=e1995]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e1996]:
+                          - img [ref=e1997]
+                          - text: Details
+                  - listitem [ref=e2000]:
+                    - generic [ref=e2001] [cursor=pointer]:
+                      - img "Java Super Dad 10 Piece Box" [ref=e2003]
+                      - generic [ref=e2006]: Chocolates
+                      - generic [ref=e2007]: Rs.3,000
+                      - generic [ref=e2008]:
+                        - heading "Java Super Dad 10 Piece Box" [level=3] [ref=e2009]
+                        - button "Add to Bundle" [ref=e2010]:
+                          - img [ref=e2011]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2012]:
+                          - img [ref=e2013]
+                          - text: Details
+                  - listitem [ref=e2016]:
+                    - generic [ref=e2017] [cursor=pointer]:
+                      - 'img "` Sexy Girl` 8 Piece Chocolate(java)" [ref=e2019]'
+                      - generic [ref=e2022]: Chocolates
+                      - generic [ref=e2023]: Rs.2,400
+                      - generic [ref=e2024]:
+                        - 'heading "` Sexy Girl` 8 Piece Chocolate(java)" [level=3] [ref=e2025]'
+                        - button "Add to Bundle" [ref=e2026]:
+                          - img [ref=e2027]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2028]:
+                          - img [ref=e2029]
+                          - text: Details
+                  - listitem [ref=e2032]:
+                    - generic [ref=e2033] [cursor=pointer]:
+                      - img "Java Gold Diamonds Big Heart With 08 Piece Pebbles Chocolate" [ref=e2035]
+                      - generic [ref=e2038]: Chocolates
+                      - generic [ref=e2039]: Rs.2,670
+                      - generic [ref=e2040]:
+                        - heading "Java Gold Diamonds Big Heart With 08 Piece Pebbles Chocolate" [level=3] [ref=e2041]
+                        - button "Add to Bundle" [ref=e2042]:
+                          - img [ref=e2043]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2044]:
+                          - img [ref=e2045]
+                          - text: Details
+                  - listitem [ref=e2048]:
+                    - generic [ref=e2049] [cursor=pointer]:
+                      - generic [ref=e2053]: Chocolates
+                      - generic [ref=e2054]: Rs.1,970
+                      - generic [ref=e2055]:
+                        - heading "Java Plain Dark Chocolate Slab" [level=3] [ref=e2056]
+                        - button "Add to Bundle" [ref=e2057]:
+                          - img [ref=e2058]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2059]:
+                          - img [ref=e2060]
+                          - text: Details
+                  - listitem [ref=e2063]:
+                    - generic [ref=e2064] [cursor=pointer]:
+                      - generic [ref=e2068]: Chocolates
+                      - generic [ref=e2069]: Rs.2,620
+                      - generic [ref=e2070]:
+                        - 'heading "Java `MWAH` 12 Piece Chocolate Box" [level=3] [ref=e2071]'
+                        - button "Add to Bundle" [ref=e2072]:
+                          - img [ref=e2073]
+                          - text: Add to Bundle
+                        - button "Details" [ref=e2074]:
+                          - img [ref=e2075]
+                          - text: Details
+              - generic [ref=e2078]: 11:20 PM
+          - generic [ref=e2085]:
+            - generic [ref=e2087]: Tell me more
+            - generic [ref=e2088]: 11:20 PM
+          - generic [ref=e2118]:
+            - img [ref=e2120]
+            - generic [ref=e2139]:
+              - generic [ref=e2140]:
+                - generic [ref=e2142]:
+                  - paragraph [ref=e2399]:
+                    - text: Nimal, these two are lovely choices for Amma. The
+                    - code [ref=e2400]: MWAH
+                    - text: 12-piece box is elegant and perfect for gifting, while the Gold Diamonds Heart is a bit more celebratory with a beautiful presentation.
+                  - paragraph [ref=e2401]: Which one do you think she’d enjoy more? I can add it to your bundle whenever you're ready!
+                - button "Regenerate" [ref=e2146] [cursor=pointer]:
+                  - img [ref=e2147]
+                  - text: Regenerate
+              - generic [ref=e2149]: 11:20 PM
+          - generic [ref=e2150]:
+            - img [ref=e2152]
+            - generic [ref=e2171]:
+              - generic [ref=e2172]:
+                - button "Regenerate" [ref=e2173] [cursor=pointer]:
+                  - img [ref=e2174]
+                  - text: Regenerate
+                - generic [ref=e2177]:
+                  - img "Java Gold Diamonds Big Heart With 08 Piece Pebbles Chocolate" [ref=e2178]
+                  - generic [ref=e2179]:
+                    - paragraph [ref=e2180]: Java Gold Diamonds Big Heart With 08 Piece Pebbles Chocolate
+                    - paragraph [ref=e2181]: Chocolates
+                    - paragraph [ref=e2182]: Rs.2,670
+                    - paragraph [ref=e2183]: "Discover a delightful treat with the Java Gold Diamonds Big Heart, now available at Kapruka in Sri Lanka. This charming chocolates set is perfect for gifting or indulging yourself. Heart Shape : Large milk chocolate heart filled with pebbles. Surrounding Chocolates : Gold diamond-shaped hazelnut praline chocolates. Quality Brand : From Java Lounge, known for high-quality desserts and 5-star cakes. Perfect for Gifts : Ideal for birthdays, anniversaries, or special occasions. Order these delicious chocolates from Kapruka for a taste of luxury in Sri Lanka."
+                    - generic [ref=e2184]:
+                      - button "Add to bundle" [ref=e2185] [cursor=pointer]
+                      - button "Full details" [ref=e2186] [cursor=pointer]
+              - generic [ref=e2187]: 11:20 PM
+          - generic [ref=e2200]:
+            - generic [ref=e2202]: Compare the first two chocolates — which one is better for amma?
+            - generic [ref=e2203]: 11:21 PM
+          - generic [ref=e2236]:
+            - img [ref=e2238]
+            - generic [ref=e2257]:
+              - paragraph [ref=e2259]: Comparing your options...
+              - generic [ref=e2260]: 11:22 PM
+          - generic [ref=e2261]:
+            - img [ref=e2263]
+            - generic [ref=e2282]:
+              - generic [ref=e2283]:
+                - generic [ref=e2285]:
+                  - paragraph [ref=e2402]: Nimal, honestly—the 'Super Dad' box probably isn't the best fit for Amma, even if the price is right!
+                  - paragraph [ref=e2403]:
+                    - text: Between these two, the
+                    - strong [ref=e2404]: Kunafa chocolate
+                    - text: is a trendy, unique flavor, but it's a small 40g bar. For a birthday gift, I’d strongly suggest looking at the
+                    - strong [ref=e2405]: Java 'MWAH' 12-piece box
+                    - text: we saw earlier—it's elegant, generous, and feels much more like a thoughtful gift for her.
+                  - paragraph [ref=e2406]: Want me to show you the details for the 'MWAH' box instead?
+                - button "Regenerate" [ref=e2291] [cursor=pointer]:
+                  - img [ref=e2292]
+                  - text: Regenerate
+              - generic [ref=e2294]: 11:22 PM
+          - generic [ref=e2295]:
+            - img [ref=e2297]
+            - generic [ref=e2316]:
+              - generic [ref=e2317]:
+                - button "Regenerate" [ref=e2318] [cursor=pointer]:
+                  - img [ref=e2319]
+                  - text: Regenerate
+                - generic [ref=e2322]:
+                  - generic [ref=e2323]:
+                    - generic [ref=e2325]: "2"
+                    - generic [ref=e2326]: Compare
+                  - generic [ref=e2327]:
+                    - generic [ref=e2328]:
+                      - generic [ref=e2329]:
+                        - img "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [ref=e2330]
+                        - generic [ref=e2331]: Rs.1,250
+                        - generic [ref=e2332]: Cheapest
+                      - generic [ref=e2333]:
+                        - heading "Java Pistachio Kunafa Dubai Style Milk Chocolate 40g" [level=3] [ref=e2334]
+                        - paragraph [ref=e2335]: "Java Pistachio Kunafa Dubai Style Milk Chocolate brings the viral Dubai kunafa chocolate to Sri Lanka in a 40g bar. Smooth milk chocolate is filled with rich pistachio cream and crisp kunafa for that signature nutty crunch. A ready-to-gift pistachio kunafa chocolate for festive treats and everyday indulgence. Smooth, creamy milk chocolate shell with velvety white chocolate filling Rich pistachio cream centre for a true pistachio chocolate flavour Delicate, crunchy kunafa for the authentic Dubai-style texture Net weight: 40g single bar By Java, a fusion of nuttiness, sweetness and crunch in every bite Great for celebrations, festive seasons, birthdays and gifting Order the Java Dubai-style kunafa chocolate online from Kapruka for fast, reliable delivery across Sri Lanka."
+                        - generic [ref=e2336]:
+                          - generic [ref=e2337]:
+                            - img [ref=e2338]
+                            - text: 0 kg
+                          - generic [ref=e2341]:
+                            - img [ref=e2342]
+                            - text: JAVA LOUNGE (PVT) LTD
+                        - generic [ref=e2348]: Low stock
+                        - generic [ref=e2349]:
+                          - button "Add" [ref=e2350] [cursor=pointer]:
+                            - img [ref=e2351]
+                            - text: Add
+                          - button "Details" [ref=e2352] [cursor=pointer]:
+                            - img [ref=e2353]
+                            - text: Details
+                    - generic [ref=e2356]:
+                      - generic [ref=e2357]:
+                        - img "Java Super Dad 10 Piece Box" [ref=e2358]
+                        - generic [ref=e2359]: Rs.3,000
+                        - generic [ref=e2360]: Premium
+                      - generic [ref=e2361]:
+                        - heading "Java Super Dad 10 Piece Box" [level=3] [ref=e2362]
+                        - paragraph [ref=e2363]: "Celebrate the superhero in your life with the Java Super Dad 10-piece chocolate box. Perfect for Father`s Day, each chocolate is marked with `SUPER DAD,` making it a special treat for him. Available at Kapruka in Sri Lanka, this gift offers a delicious and luxurious experience. Includes: 10 pieces of premium chocolates Design: Each piece inscribed with `SUPER DAD` Packaging: Elegant and sleek box Purpose: Ideal for Fatherâ??s Day or celebrating your hero Crafted with the finest ingredients for the ultimate sweet indulgence."
+                        - generic [ref=e2364]:
+                          - generic [ref=e2365]:
+                            - img [ref=e2366]
+                            - text: 0 kg
+                          - generic [ref=e2369]:
+                            - img [ref=e2370]
+                            - text: Kapruka
+                        - generic [ref=e2376]: Low stock
+                        - generic [ref=e2378]:
+                          - button "Add" [ref=e2379] [cursor=pointer]:
+                            - img [ref=e2380]
+                            - text: Add
+                          - button "Details" [ref=e2381] [cursor=pointer]:
+                            - img [ref=e2382]
+                            - text: Details
+                  - button "Show comparison table" [ref=e2385]:
+                    - img [ref=e2386]
+                    - text: Show comparison table
+              - generic [ref=e2388]: 11:22 PM
+          - generic [ref=e2408]:
+            - generic [ref=e2410]: හායි! මට bunga එකකුයි cake එකකුයි ඕනේ මගේ අම්මට. Kandy එකෙන් deliver කරන්න පුළුවන්ද?
+            - generic [ref=e2411]: 11:23 PM
+          - generic [ref=e2412]:
+            - img [ref=e2414]
+            - generic [ref=e2438]: Finding the perfect match
+        - generic [ref=e1850]:
+          - generic [ref=e1851]:
+            - button "Add the first one" [ref=e2079] [cursor=pointer]
+            - button "Show more options" [ref=e2080] [cursor=pointer]
+            - button "Tell me more" [ref=e2081] [cursor=pointer]
+            - button "Cheaper ones please" [ref=e2082] [cursor=pointer]
+          - generic [ref=e1857]:
+            - button "Upload image" [ref=e1858] [cursor=pointer]:
+              - img [ref=e1859]
+            - textbox "Ask Wasi — type your gift request" [disabled] [ref=e1863]:
+              - /placeholder: Wasi is thinking…
+            - button "Voice input" [ref=e1864] [cursor=pointer]
+            - button [disabled] [ref=e1869]:
+              - img [ref=e1870]
+    - button "Start new conversation" [ref=e1873] [cursor=pointer]:
+      - img [ref=e1874]
