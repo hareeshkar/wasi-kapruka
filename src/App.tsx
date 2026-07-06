@@ -1406,9 +1406,15 @@ export default function App() {
         delay: 4000
       },
       {
+        text: 'Actually, I am in London. Can you show me prices in GBP instead?',
+        reply: 'Got it! I have updated everything to GBP for you — your cart total is currently £29.97. Here are more options in your currency.',
+        products: discoverProducts.filter(p => p.category === 'Flowers').slice(0, 1),
+        delay: 4000
+      },
+      {
         action: 'checkout',
         text: 'Proceed to guest checkout on Colombo 01',
-        reply: 'Verified destination Colombo 01! Launching Checkout values now. I have locked your prices. Pay below.',
+        reply: 'Verified destination Colombo 01! I have locked your prices. Pay below — the checkout opens right here, no new tab needed.',
         order: {
           order_ref: 'ORD-20260604-8923',
           order_id: 'KAP-309485',
