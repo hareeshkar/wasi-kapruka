@@ -1894,6 +1894,7 @@ export default function App() {
             onViewDetails={handleViewDetails}
             onQuickReply={handleSendMessage as any}
             cartSize={cart.length}
+            cartItems={cart}
             onComposerFocusChange={setComposerFocused}
             onPay={(order) => { if (order) setOrderResult(order); setPaymentModalOpen(true); }}
           />

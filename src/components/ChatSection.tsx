@@ -42,6 +42,7 @@ interface ChatSectionProps {
   onViewDetails?: (productCode: string) => void;
   onQuickReply: (text: string) => void;
   cartSize?: number;
+  cartItems?: { product_code: string; quantity: number }[];
   /** Mobile only: notify parent when the composer gains/loses focus, so the bottom tab bar can tuck away while typing */
   onComposerFocusChange?: (focused: boolean) => void;
   /** Open in-app payment modal for order checkout */
@@ -98,7 +99,7 @@ const isProgressMessage = (content: string): boolean => {
 // ── Component ───────────────────────────────────────────────────────────────
 export default function ChatSection({
   messages, isStreaming, onSendMessage, onSendVoice, onRetryMessage, onAddMessage, onUpdateMessage,
-  onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0, onComposerFocusChange, onPay,
+  onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0, cartItems = [], onComposerFocusChange, onPay,
 }: ChatSectionProps) {
   const [inputText, setInputText] = useState('');
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -527,6 +528,7 @@ export default function ChatSection({
                           {msg.products.map((product, i) => (
                             <div role="listitem" key={product.product_code || i}>
                             <ProductCard product={product} compact
+                              isAdded={cartItems.some(ci => ci.product_code === product.product_code)}
                               onAddToBundle={onAddToBundle} onViewDetails={onViewDetails ? () => onViewDetails(product.product_code) : undefined} />
                             </div>
                           ))}
@@ -536,7 +538,7 @@ export default function ChatSection({
                       {/* Comparison card */}
                       {msg.compare_products && msg.compare_products.length > 0 && (
                         <div className="mt-2">
-                          <ProductComparisonCard products={msg.compare_products} onAddToBundle={onAddToBundle} onViewDetails={onViewDetails} />
+                          <ProductComparisonCard products={msg.compare_products} onAddToBundle={onAddToBundle} onViewDetails={onViewDetails} cartItems={cartItems} />
                         </div>
                       )}
 

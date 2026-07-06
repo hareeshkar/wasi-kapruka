@@ -11,6 +11,7 @@ interface ProductCardProps {
   lang?: 'en' | 'si' | 'ta';
   compact?: boolean;
   accentSide?: 'left' | 'right';
+  isAdded?: boolean;
 }
 
 const L = {
@@ -83,19 +84,22 @@ function LazyImage({ src, alt, className, style }: { src: string; alt: string; c
   );
 }
 
-export default function ProductCard({ product, onAddToBundle, onViewDetails, lang = 'en', compact = false, accentSide = 'right' }: ProductCardProps) {
+export default function ProductCard({ product, onAddToBundle, onViewDetails, lang = 'en', compact = false, accentSide = 'right', isAdded: isAddedProp }: ProductCardProps) {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(
     product.variants?.length ? product.variants[0] : undefined
   );
-  const [isAdded, setIsAdded] = useState(false);
+  const [isAddedLocal, setIsAddedLocal] = useState(false);
 
-  // Reset isAdded when product changes (e.g., in a virtualized list)
-  useEffect(() => { setIsAdded(false); }, [product.product_code]);
+  // Use prop if provided, otherwise use local state
+  const isAdded = isAddedProp ?? isAddedLocal;
+
+  // Reset local state when product changes
+  useEffect(() => { setIsAddedLocal(false); }, [product.product_code]);
 
   const handleAdd = () => {
     if (isAdded) return;
     onAddToBundle(product, selectedVariant);
-    setIsAdded(true);
+    setIsAddedLocal(true);
   };
 
   const price = selectedVariant ? selectedVariant.price_lkr : product.price_lkr;

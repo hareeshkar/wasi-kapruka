@@ -8,6 +8,7 @@ interface ProductComparisonCardProps {
   onAddToBundle: (product: Product, variant?: ProductVariant) => void;
   onViewDetails?: (productCode: string) => void;
   lang?: 'en' | 'si' | 'ta';
+  cartItems?: { product_code: string; quantity: number }[];
 }
 
 const LOCALE = {
@@ -21,11 +22,14 @@ export default function ProductComparisonCard({
   onAddToBundle,
   onViewDetails,
   lang = 'en',
+  cartItems = [],
 }: ProductComparisonCardProps) {
   const t = LOCALE[lang] || LOCALE.en;
   const [addedSet, setAddedSet] = useState<Set<string>>(new Set());
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
   const [showTable, setShowTable] = useState(false);
+
+  const isAdded = (code: string) => addedSet.has(code) || cartItems.some(ci => ci.product_code === code);
 
   const handleAdd = (prod: Product) => {
     if (addedSet.has(prod.product_code)) return;
@@ -74,7 +78,7 @@ export default function ProductComparisonCard({
       {/* Comparison grid */}
       <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none">
         {products.map((prod) => {
-          const isAdded = addedSet.has(prod.product_code);
+          const added = isAdded(prod.product_code);
           const isCheapest = prod.product_code === cheapestId;
           const isPremium = prod.product_code === premiumId && maxPrice !== minPrice;
           return (
@@ -158,14 +162,14 @@ export default function ProductComparisonCard({
                 <div className="space-y-1">
                   <button
                     onClick={() => handleAdd(prod)}
-                    disabled={isAdded}
+                    disabled={added}
                     className={`w-full py-2 min-h-[36px] px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 ${
-                      isAdded
+                      added
                         ? 'bg-violet-tint text-violet border border-violet/15'
                         : 'bg-violet hover:bg-violet-deep text-white'
                     }`}
                   >
-                    {isAdded ? (
+                    {added ? (
                       <><Check className="w-2.5 h-2.5 stroke-[2.5]" /> {t.added}</>
                     ) : (
                       <><Plus className="w-2.5 h-2.5 stroke-[2.5]" /> {t.add}</>
