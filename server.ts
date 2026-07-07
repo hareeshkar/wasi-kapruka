@@ -1731,6 +1731,186 @@ async function startServer() {
     }
   });
 
+  // ── Shared tool executor ─────────────────────────────────────────────────────
+  // Single source of truth for executing a Wasi tool call, used by BOTH the
+  // text-chat agentic loop (/api/chat) and the Gemini Live voice session
+  // (/api/live-tool). Previously /api/live-tool had its own parallel,
+  // drifted implementation that just echoed args back for several tools
+  // (wasi_get_cart, wasi_get_form_state, wasi_show_categories,
+  // wasi_browse_subcategories, wasi_convert_currency) instead of fetching
+  // real data — this unifies both paths so voice and text behave identically.
+  type WasiToolContext = {
+    cartLines: Array<{ product_code?: string; name: string; price_lkr: number; quantity: number; category?: string }>;
+    budget: number;
+    cartTotal: number;
+    formState: Record<string, any>;
+  };
+  async function executeWasiTool(toolCall: { name: string; args: any }, ctx: WasiToolContext) {
+    const { cartLines, budget, cartTotal, formState } = ctx;
+    // Wasi UI virtual tools — intercepted here, never forwarded to Kapruka MCP
+    if (toolCall.name === 'wasi_get_cart') {
+      return { items: cartLines, budget, cartTotal, count: cartLines.length };
+    }
+    if (toolCall.name === 'wasi_get_form_state') {
+      // Return actual field-level status so LLM knows what it still needs to ask
+      const fs = formState || {};
+      return {
+        cart_count:      cartLines.length,
+        has_cart:        cartLines.length > 0,
+        budget,
+        // Fields: filled = truthy string, empty = ''
+        recipient_name:   fs.recipient_name   || '',
+        recipient_phone:  fs.recipient_phone  || '',
+        city:             fs.city_name        || '',
+        delivery_address: fs.delivery_address || '',
+        delivery_date:    fs.delivery_date    || '',
+        sender_name:      fs.sender_name      || '',
+        // Convenience: what's still missing?
+        missing_fields: [
+          !fs.recipient_name   && 'recipient_name',
+          !fs.recipient_phone  && 'recipient_phone',
+          !fs.city_name        && 'city',
+          !fs.delivery_address && 'delivery_address',
+          !fs.delivery_date    && 'delivery_date',
+        ].filter(Boolean),
+      };
+    }
+    if (toolCall.name === 'wasi_add_to_cart') {
+      // Normalize price to LKR before passing to client — cart always stores LKR prices.
+      // MCP search with currency=USD returns USD prices in price_lkr field, but cart
+      // expects LKR. Fetch the real LKR price from MCP if needed.
+      const itemCurrency = toolCall.args?.currency || 'LKR';
+      if (itemCurrency !== 'LKR' && toolCall.args?.price_lkr) {
+        try {
+          const lkrProduct = await callMcpTool('kapruka_get_product', {
+            product_id: toolCall.args.product_id,
+            product_code: toolCall.args.product_id,
+            id: toolCall.args.product_id,
+            currency: 'LKR',
+          }, false);
+          const lkrPrice = lkrProduct?.price?.amount;
+          if (lkrPrice && typeof lkrPrice === 'number' && lkrPrice > 0) {
+            toolCall.args.price_lkr = lkrPrice;
+            toolCall.args.currency = 'LKR';
+          }
+        } catch {
+          // If LKR fetch fails, keep original price — not ideal but doesn't break
+        }
+      }
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_show_progress') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_prefill_checkout') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_order_now') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_remove_from_cart') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_update_cart_quantity') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_show_product_detail') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_compare_products') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    if (toolCall.name === 'wasi_new_order') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    // wasi_show_checkout_wizard — virtual tool, just pass args to client
+    if (toolCall.name === 'wasi_show_checkout_wizard') {
+      return { _virtual: true, ...toolCall.args };
+    }
+    // wasi_show_categories — fetch live categories from Kapruka MCP
+    if (toolCall.name === 'wasi_show_categories') {
+      try {
+        const raw = await callMcpTool('kapruka_list_categories', { depth: 2 }, false);
+        const categories = raw?.categories ?? raw ?? [];
+        return { _virtual: true, categories };
+      } catch {
+        return { _virtual: true, categories: [] };
+      }
+    }
+    // wasi_browse_subcategories — fetch subcategories for a specific category
+    if (toolCall.name === 'wasi_browse_subcategories') {
+      try {
+        const categoryName = toolCall.args?.category || '';
+        const raw = await callMcpTool('kapruka_list_categories', { depth: 2 }, false);
+        const cats = raw?.categories ?? raw ?? [];
+        const found = cats.find((c: any) => c.name?.toLowerCase() === categoryName.toLowerCase());
+        if (!found) {
+          return { _virtual: true, category: categoryName, subcategories: [], error: 'Category not found' };
+        }
+        return { _virtual: true, category: found.name, subcategories: found.children || [] };
+      } catch {
+        return { _virtual: true, category: toolCall.args?.category || '', subcategories: [] };
+      }
+    }
+    // wasi_convert_currency — fetch live converted prices from MCP for each cart item
+    if (toolCall.name === 'wasi_convert_currency') {
+      const targetCurrency = toolCall.args?.currency;
+      const supported = ['USD', 'GBP', 'AUD', 'EUR'];
+      if (!targetCurrency || !supported.includes(targetCurrency)) {
+        return { error: `Unsupported currency: ${targetCurrency}. Use USD, GBP, AUD, or EUR.` };
+      }
+      if (cartLines.length === 0) {
+        return { error: 'Cart is empty — add items before converting currency.', items: [], total: 0, currency: targetCurrency };
+      }
+      try {
+        const converted = await Promise.all(
+          cartLines.map(async (item: any) => {
+            try {
+              const product = await callMcpTool('kapruka_get_product', {
+                product_id: item.product_code,
+                product_code: item.product_code,
+                id: item.product_code,
+                currency: targetCurrency,
+              }, false);
+              const convertedPrice = product?.price?.amount ?? item.price_lkr;
+              return {
+                product_code: item.product_code,
+                name: item.name,
+                original_price_lkr: item.price_lkr,
+                converted_price: convertedPrice,
+                quantity: item.quantity,
+              };
+            } catch {
+              // MCP failed for this item — return original LKR price
+              return {
+                product_code: item.product_code,
+                name: item.name,
+                original_price_lkr: item.price_lkr,
+                converted_price: item.price_lkr,
+                quantity: item.quantity,
+                conversion_failed: true,
+              };
+            }
+          })
+        );
+        const total = converted.reduce((s: number, i: any) => s + (i.converted_price * i.quantity), 0);
+        const lkrTotal = cartLines.reduce((s: number, i: any) => s + (i.price_lkr * i.quantity), 0);
+        // Compute approximate exchange rate for transparency
+        const rate = lkrTotal > 0 && total > 0 ? Math.round((lkrTotal / total) * 100) / 100 : null;
+        return {
+          items: converted,
+          total: Math.round(total * 100) / 100,
+          currency: targetCurrency,
+          lkr_total: lkrTotal,
+          exchange_rate: rate ? `1 ${targetCurrency} ≈ ${rate} LKR` : null,
+        };
+      } catch (err: any) {
+        return { error: `Currency conversion failed: ${err.message}`, items: [], total: 0, currency: targetCurrency };
+      }
+    }
+    return await callMcpTool(toolCall.name, toolCall.args, false); // always live
+  }
+
   // ── Chat Endpoint ────────────────────────────────────────────────────────────
   app.post('/api/chat', async (req, res) => {
     const {
@@ -1998,168 +2178,7 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
         KAPRUKA_TOOL_DECLARATIONS,
         async (toolCall) => {
           console.log(`  → [Tool] ${toolCall.name}`, JSON.stringify(toolCall.args).substring(0, 120));
-          // Wasi UI virtual tools — intercepted here, never forwarded to Kapruka MCP
-          if (toolCall.name === 'wasi_get_cart') {
-            return { items: cartLines, budget, cartTotal, count: cartLines.length };
-          }
-          if (toolCall.name === 'wasi_get_form_state') {
-            // Return actual field-level status so LLM knows what it still needs to ask
-            const fs = formState || {};
-            return {
-              cart_count:      cartLines.length,
-              has_cart:        cartLines.length > 0,
-              budget,
-              // Fields: filled = truthy string, empty = ''
-              recipient_name:   fs.recipient_name   || '',
-              recipient_phone:  fs.recipient_phone  || '',
-              city:             fs.city_name        || '',
-              delivery_address: fs.delivery_address || '',
-              delivery_date:    fs.delivery_date    || '',
-              sender_name:      fs.sender_name      || '',
-              // Convenience: what's still missing?
-              missing_fields: [
-                !fs.recipient_name   && 'recipient_name',
-                !fs.recipient_phone  && 'recipient_phone',
-                !fs.city_name        && 'city',
-                !fs.delivery_address && 'delivery_address',
-                !fs.delivery_date    && 'delivery_date',
-              ].filter(Boolean),
-            };
-          }
-          if (toolCall.name === 'wasi_add_to_cart') {
-            // Normalize price to LKR before passing to client — cart always stores LKR prices.
-            // MCP search with currency=USD returns USD prices in price_lkr field, but cart
-            // expects LKR. Fetch the real LKR price from MCP if needed.
-            const itemCurrency = toolCall.args?.currency || 'LKR';
-            if (itemCurrency !== 'LKR' && toolCall.args?.price_lkr) {
-              try {
-                const lkrProduct = await callMcpTool('kapruka_get_product', {
-                  product_id: toolCall.args.product_id,
-                  product_code: toolCall.args.product_id,
-                  id: toolCall.args.product_id,
-                  currency: 'LKR',
-                }, false);
-                const lkrPrice = lkrProduct?.price?.amount;
-                if (lkrPrice && typeof lkrPrice === 'number' && lkrPrice > 0) {
-                  toolCall.args.price_lkr = lkrPrice;
-                  toolCall.args.currency = 'LKR';
-                }
-              } catch {
-                // If LKR fetch fails, keep original price — not ideal but doesn't break
-              }
-            }
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_show_progress') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_prefill_checkout') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_order_now') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_remove_from_cart') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_update_cart_quantity') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_show_product_detail') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_compare_products') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          if (toolCall.name === 'wasi_new_order') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          // wasi_show_checkout_wizard — virtual tool, just pass args to client
-          if (toolCall.name === 'wasi_show_checkout_wizard') {
-            return { _virtual: true, ...toolCall.args };
-          }
-          // wasi_show_categories — fetch live categories from Kapruka MCP
-          if (toolCall.name === 'wasi_show_categories') {
-            try {
-              const raw = await callMcpTool('kapruka_list_categories', { depth: 2 }, false);
-              const categories = raw?.categories ?? raw ?? [];
-              return { _virtual: true, categories };
-            } catch {
-              return { _virtual: true, categories: [] };
-            }
-          }
-          // wasi_browse_subcategories — fetch subcategories for a specific category
-          if (toolCall.name === 'wasi_browse_subcategories') {
-            try {
-              const categoryName = toolCall.args?.category || '';
-              const raw = await callMcpTool('kapruka_list_categories', { depth: 2 }, false);
-              const cats = raw?.categories ?? raw ?? [];
-              const found = cats.find((c: any) => c.name?.toLowerCase() === categoryName.toLowerCase());
-              if (!found) {
-                return { _virtual: true, category: categoryName, subcategories: [], error: 'Category not found' };
-              }
-              return { _virtual: true, category: found.name, subcategories: found.children || [] };
-            } catch {
-              return { _virtual: true, category: toolCall.args?.category || '', subcategories: [] };
-            }
-          }
-          // wasi_convert_currency — fetch live converted prices from MCP for each cart item
-          if (toolCall.name === 'wasi_convert_currency') {
-            const targetCurrency = toolCall.args?.currency;
-            const supported = ['USD', 'GBP', 'AUD', 'EUR'];
-            if (!targetCurrency || !supported.includes(targetCurrency)) {
-              return { error: `Unsupported currency: ${targetCurrency}. Use USD, GBP, AUD, or EUR.` };
-            }
-            if (cartLines.length === 0) {
-              return { error: 'Cart is empty — add items before converting currency.', items: [], total: 0, currency: targetCurrency };
-            }
-            try {
-              const converted = await Promise.all(
-                cartLines.map(async (item: any) => {
-                  try {
-                    const product = await callMcpTool('kapruka_get_product', {
-                      product_id: item.product_code,
-                      product_code: item.product_code,
-                      id: item.product_code,
-                      currency: targetCurrency,
-                    }, false);
-                    const convertedPrice = product?.price?.amount ?? item.price_lkr;
-                    return {
-                      product_code: item.product_code,
-                      name: item.name,
-                      original_price_lkr: item.price_lkr,
-                      converted_price: convertedPrice,
-                      quantity: item.quantity,
-                    };
-                  } catch {
-                    // MCP failed for this item — return original LKR price
-                    return {
-                      product_code: item.product_code,
-                      name: item.name,
-                      original_price_lkr: item.price_lkr,
-                      converted_price: item.price_lkr,
-                      quantity: item.quantity,
-                      conversion_failed: true,
-                    };
-                  }
-                })
-              );
-              const total = converted.reduce((s: number, i: any) => s + (i.converted_price * i.quantity), 0);
-              const lkrTotal = cartLines.reduce((s: number, i: any) => s + (i.price_lkr * i.quantity), 0);
-              // Compute approximate exchange rate for transparency
-              const rate = lkrTotal > 0 && total > 0 ? Math.round((lkrTotal / total) * 100) / 100 : null;
-              return {
-                items: converted,
-                total: Math.round(total * 100) / 100,
-                currency: targetCurrency,
-                lkr_total: lkrTotal,
-                exchange_rate: rate ? `1 ${targetCurrency} ≈ ${rate} LKR` : null,
-              };
-            } catch (err: any) {
-              return { error: `Currency conversion failed: ${err.message}`, items: [], total: 0, currency: targetCurrency };
-            }
-          }
-          return await callMcpTool(toolCall.name, toolCall.args, false); // always live
+          return executeWasiTool(toolCall, { cartLines, budget, cartTotal, formState });
         },
         // When transcript succeeded, voice is in the text — no audio inlineData needed.
         // When transcription failed, pass raw audio as fallback (Gemini hears it directly).
@@ -2444,10 +2463,6 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         tools: [{ functionDeclarations: LIVE_VOICE_TOOL_DECLARATIONS.map(toGeminiFunctionDeclaration) }],
-        // Required for gemini-3.1-flash-live-preview to accept sendClientContent
-        // at all — without it, seeding initial history closes the session
-        // with "Request contains an invalid argument" right after setupComplete.
-        historyConfig: { initialHistoryInClientContent: true },
       };
       if (systemPrompt) {
         liveConfig.systemInstruction = { parts: [{ text: systemPrompt }] };
@@ -2483,33 +2498,31 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
   });
 
   // ── Live API: Tool Execution ───────────────────────────────────────────────
-  // Executes a tool call from the Live API session. The browser sends tool name
-  // + args, this endpoint runs MCP tools and returns the result.
+  // Executes a tool call from the Live API session. Routes through the SAME
+  // executeWasiTool used by /api/chat, so voice and text behave identically —
+  // this used to have its own parallel, drifted "echo the args back" logic
+  // for tools that actually need cart/form-state context or an MCP fetch
+  // (wasi_get_cart, wasi_get_form_state, wasi_show_categories,
+  // wasi_browse_subcategories, wasi_convert_currency), which silently
+  // returned empty/wrong data in voice mode. The client sends its current
+  // cart/budget/form-state along with each tool call (it has no persistent
+  // server-side session the way /api/chat's request body does).
   app.post('/api/live-tool', async (req, res) => {
     try {
-      const { name, args } = req.body || {};
+      const { name, args, cart, budget, formState } = req.body || {};
       if (!name) return res.status(400).json({ error: 'name required' });
 
       console.log(`  → [Live/Tool] ${name}`, JSON.stringify(args).substring(0, 120));
 
-      // Virtual tools — execute locally, return immediately
-      const VIRTUAL_TOOLS = [
-        'wasi_get_cart', 'wasi_get_form_state', 'wasi_add_to_cart',
-        'wasi_show_progress', 'wasi_prefill_checkout', 'wasi_order_now',
-        'wasi_remove_from_cart', 'wasi_update_cart_quantity',
-        'wasi_show_product_detail', 'wasi_compare_products',
-        'wasi_new_order', 'wasi_show_categories', 'wasi_browse_subcategories',
-        'wasi_convert_currency',
-      ];
+      const cartLines = Array.isArray(cart) ? cart : [];
+      const cartTotal = cartLines.reduce((s: number, i: any) => s + (i.price_lkr ?? 0) * (i.quantity ?? 1), 0);
 
-      if (VIRTUAL_TOOLS.includes(name)) {
-        // Virtual tools return their args as-is (client processes them)
-        console.log(`  ← [Live/Tool] ${name} (virtual, echoed back)`);
-        return res.json({ result: { _virtual: true, ...args } });
-      }
-
-      // MCP tools — execute on server
-      const result = await callMcpTool(name, args || {}, false);
+      const result = await executeWasiTool({ name, args: args || {} }, {
+        cartLines,
+        budget: budget ?? 0,
+        cartTotal,
+        formState: formState || {},
+      });
       console.log(`  ← [Live/Tool] ${name} result:`, JSON.stringify(result).substring(0, 200));
       res.json({ result });
     } catch (err: any) {

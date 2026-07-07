@@ -9,7 +9,8 @@
  *  - Transcription callbacks for chat UI streaming
  *  - Tool call execution via /api/live-tool
  *  - Interruption handling (barge-in)
- *  - History context seeding via sendClientContent
+ *  - Prior-conversation context is folded into systemPrompt by the caller
+ *    (not seeded via sendClientContent — see connect()'s comment)
  *  - Graceful error handling with fallback callback
  *
  * Audio format per docs:
@@ -57,6 +58,14 @@ export interface LiveCallbacks {
    * with the same tool result via processToolCalls/processAndApplyToolResponse.
    */
   onToolResult?: (name: string, args: Record<string, unknown>, result: any) => void;
+  /**
+   * Returns the current cart/budget/form-state so /api/live-tool can answer
+   * context-dependent tools (wasi_get_cart, wasi_get_form_state,
+   * wasi_convert_currency) with real data instead of an empty echo — called
+   * fresh on every tool call, not just at connect time, since the cart
+   * changes over the course of a session.
+   */
+  getToolContext?: () => { cart: any[]; budget: number; formState: Record<string, any> };
   /** Called when the session ends normally */
   onEnd?: () => void;
   /** Called on error — consumer should fall back to text chat */
@@ -65,7 +74,7 @@ export interface LiveCallbacks {
 
 export interface UseGeminiLiveReturn {
   state: LiveState;
-  connect: (opts: { systemPrompt?: string; history?: Array<{ role: string; content: string }> }) => Promise<void>;
+  connect: (opts: { systemPrompt?: string }) => Promise<void>;
   disconnect: () => void;
   sendText: (text: string) => void;
   toggleMic: () => void;
@@ -247,10 +256,11 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
   const executeToolCall = useCallback(async (id: string, name: string, args: Record<string, unknown>) => {
     try {
       callbacksRef.current.onToolCall?.(name, args);
+      const ctx = callbacksRef.current.getToolContext?.();
       const res = await fetch('/api/live-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, args }),
+        body: JSON.stringify({ name, args, cart: ctx?.cart, budget: ctx?.budget, formState: ctx?.formState }),
       });
 
       if (!res.ok) {
@@ -310,7 +320,6 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
   // ── Connect ───────────────────────────────────────────────────────────────
   const connect = useCallback(async (opts: {
     systemPrompt?: string;
-    history?: Array<{ role: string; content: string }>;
   }) => {
     if (state !== 'idle' && state !== 'error') return;
     setState('connecting');
@@ -349,15 +358,12 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         tools: [{ functionDeclarations: LIVE_VOICE_TOOL_DECLARATIONS.map(toGeminiFunctionDeclaration) }],
-        // Required for gemini-3.1-flash-live-preview to accept the
-        // sendClientContent history-seeding call below — see server.ts.
-        historyConfig: { initialHistoryInClientContent: true },
       };
       if (opts.systemPrompt) {
         config.systemInstruction = { parts: [{ text: opts.systemPrompt }] };
       }
 
-      console.log(`[Live] Connecting — model=gemini-3.1-flash-live-preview tools=[${LIVE_VOICE_TOOL_DECLARATIONS.map(t => t.name).join(', ')}] hasSystemPrompt=${!!opts.systemPrompt} historyTurns=${opts.history?.length ?? 0}`);
+      console.log(`[Live] Connecting — model=gemini-3.1-flash-live-preview tools=[${LIVE_VOICE_TOOL_DECLARATIONS.map(t => t.name).join(', ')}] hasSystemPrompt=${!!opts.systemPrompt}`);
       console.log('[Live] connect() config:', JSON.stringify(config, null, 2));
 
       // 4. Connect via WebSocket. ai.live.connect() resolves as soon as the
@@ -512,18 +518,14 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
         throw new Error('Live session setup did not complete in time');
       }
 
-      // Seed conversation history if provided (after setup is confirmed)
-      if (opts.history && opts.history.length > 0) {
-        try {
-          const turns = opts.history.map(h => ({
-            role: h.role,
-            parts: [{ text: h.content }],
-          }));
-          session.sendClientContent({ turns, turnComplete: false });
-        } catch (err) {
-          console.warn('[Live] Failed to seed history:', err);
-        }
-      }
+      // Prior-conversation context is folded into systemPrompt by the caller
+      // (App.tsx's handleLiveToggle) instead of seeded here via
+      // sendClientContent. gemini-3.1-flash-live-preview requires
+      // historyConfig.initialHistoryInClientContent for that call to be
+      // accepted at all, and that field doesn't exist anywhere in the
+      // installed @google/genai SDK's LiveConnectConfig type — an unverified
+      // guess here isn't worth risking a 1007 close on every session just to
+      // seed history. Plain system-prompt text is a proven, working path.
 
       // 5. Start mic capture (after setup is confirmed)
       // Use 16kHz so AudioWorklet captures at native rate — no resampling needed

@@ -102,6 +102,14 @@ export default function App() {
       now: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     })
   );
+  // De-dupes stuttered tool calls across a live session. The text-chat flow
+  // dedupes repeated identical calls within one batched response via
+  // processToolCalls' actionSeen set, but Live delivers each tool call as a
+  // separate async message — that per-response set can't see across them, so
+  // a stuttered wasi_add_to_cart (same call twice in a few seconds) would
+  // double-add without this.
+  const liveToolCallSeenRef = useRef<Map<string, number>>(new Map());
+  const LIVE_TOOL_DEDUPE_WINDOW_MS = 3000;
 
   // Error toast state
   const [errorToast, setErrorToast] = useState<{
@@ -149,6 +157,18 @@ export default function App() {
     onToolResult: (name, args, result) => {
       void applyLiveToolResult(name, args, result);
     },
+    getToolContext: () => ({
+      cart: cartForAI(),
+      budget,
+      formState: orderIntent ? {
+        recipient_name:   orderIntent.recipient_name   || '',
+        recipient_phone:  orderIntent.recipient_phone  || '',
+        city_name:        orderIntent.city_name        || '',
+        delivery_address: orderIntent.delivery_address || '',
+        delivery_date:    orderIntent.delivery_date    || '',
+        sender_name:      orderIntent.sender_name      || '',
+      } : {},
+    }),
     onEnd: () => {
       liveTranscriptRouterRef.current.reset();
     },
@@ -275,25 +295,31 @@ ${voiceInstructions}`;
   }, [cart, budget, profile, userCurrency]);
 
   /**
-   * Build conversation history for Live session context seeding.
-   * Sends the last N messages so the model has context from the text chat.
+   * Build recent conversation history as PLAIN TEXT to fold into the Live
+   * system prompt. Not sent via sendClientContent: gemini-3.1-flash-live-preview
+   * requires historyConfig.initialHistoryInClientContent for that call to be
+   * accepted, and that field doesn't exist in the installed @google/genai
+   * SDK's LiveConnectConfig type — text in systemInstruction is a plain,
+   * already-proven path that carries the same context without that risk.
    */
   const buildLiveHistory = useCallback(() => {
-    // Send last 10 messages for context (not too many to avoid token waste)
+    // Last 10 messages for context (not too many to avoid token waste)
     const recentMessages = messages.slice(-10);
-    return recentMessages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      content: m.content || '',
-    })).filter(m => m.content.trim().length > 0);
+    return recentMessages
+      .map(m => ({ role: m.role === 'assistant' ? 'Wasi' : 'User', content: m.content || '' }))
+      .filter(m => m.content.trim().length > 0);
   }, [messages]);
 
   const handleLiveToggle = useCallback(() => {
     if (live.state === 'active' || live.state === 'connecting') {
       live.disconnect();
     } else {
-      const sysPrompt = buildLiveSystemPrompt();
       const history = buildLiveHistory();
-      live.connect({ systemPrompt: sysPrompt, history });
+      const historyText = history.length > 0
+        ? `\n\nRECENT CONVERSATION (already happened, for context — don't repeat greetings or re-ask what's already answered here):\n${history.map(h => `${h.role}: ${h.content}`).join('\n')}`
+        : '';
+      const sysPrompt = buildLiveSystemPrompt() + historyText;
+      live.connect({ systemPrompt: sysPrompt });
     }
   }, [live, buildLiveSystemPrompt, buildLiveHistory]);
   // 'error' is deliberately excluded — every onError call site sets
@@ -980,6 +1006,20 @@ ${voiceInstructions}`;
    * so voice and text stay behaviorally identical.
    */
   const applyLiveToolResult = async (name: string, args: Record<string, unknown>, result: any) => {
+    // Stutter guard — see liveToolCallSeenRef declaration for why this is
+    // needed in addition to processToolCalls' own within-response dedup.
+    const dedupeKey = `${name}:${JSON.stringify(args)}`;
+    const now = Date.now();
+    const lastSeen = liveToolCallSeenRef.current.get(dedupeKey);
+    for (const [key, ts] of liveToolCallSeenRef.current) {
+      if (now - ts > LIVE_TOOL_DEDUPE_WINDOW_MS) liveToolCallSeenRef.current.delete(key);
+    }
+    liveToolCallSeenRef.current.set(dedupeKey, now);
+    if (lastSeen && now - lastSeen < LIVE_TOOL_DEDUPE_WINDOW_MS) {
+      console.warn(`[Live/Tool] Skipped duplicate call within ${LIVE_TOOL_DEDUPE_WINDOW_MS}ms: ${name}`);
+      return;
+    }
+
     const state = processToolCalls([{ toolName: name, args, result }], { budget, orderIntent });
 
     // Execute side-effect actions (same switch as processAndApplyToolResponse)
