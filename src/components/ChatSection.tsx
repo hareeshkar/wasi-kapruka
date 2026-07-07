@@ -5,7 +5,7 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeSanitize from 'rehype-sanitize';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Message, Product, City, Order, OrderIntent, CartItem } from '../types';
-import { Send, ImagePlus, Play, Pause, Radio } from 'lucide-react';
+import { Send, ImagePlus, Play, Pause, Radio, Mic } from 'lucide-react';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
 import ProductCard from './ProductCard';
 import OrderConfirmationCard from './OrderConfirmationCard';
@@ -798,6 +798,16 @@ export default function ChatSection({
                 role="textbox"
               />
 
+              {/* Live voice mode button — only rendered while not live; LiveControlBar (above) takes over once active */}
+              <button type="button" onClick={onLiveToggle} disabled={micState === 'transcribing'}
+                title="Start live voice"
+                className="p-2.5 min-w-[40px] min-h-[40px] rounded-full cursor-pointer transition-all active:scale-90 disabled:opacity-30"
+                style={{ background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)', boxShadow: '0 2px 10px rgba(64,41,112,0.30)' }}>
+                <div className="flex items-center gap-[2px] h-3">
+                  {[0, 1, 2].map(i => <span key={i} className="w-[2px] rounded-full bg-white" style={{ height: i === 1 ? '12px' : '8px', opacity: 0.9, animation: `waveBar 1.2s ease-in-out ${i * 0.15}s infinite` }} />)}
+                </div>
+              </button>
+
               <button type="button" onClick={handleMicClick} disabled={micState === 'transcribing'}
                 title={micState === 'recording' ? 'Stop recording' : 'Voice input'}
                 className={`p-2.5 min-w-[40px] min-h-[40px] rounded-full cursor-pointer transition-all active:scale-90 disabled:cursor-not-allowed ${
@@ -812,17 +822,8 @@ export default function ChatSection({
                     {[0, 1, 2].map(i => <span key={i} className="w-[2px] rounded-full bg-violet" style={{ height: i === 1 ? '12px' : '8px', animation: `waveBar 0.8s ease-in-out ${i * 0.1}s infinite` }} />)}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-[2px] h-3">
-                    {[0, 1, 2].map(i => <span key={i} className="w-[2px] rounded-full bg-current" style={{ height: i === 1 ? '12px' : '8px', opacity: 0.8, animation: `waveBar 1.2s ease-in-out ${i * 0.15}s infinite` }} />)}
-                  </div>
+                  <Mic className="w-4 h-4" />
                 )}
-              </button>
-
-              {/* Live voice mode button — only rendered while not live; LiveControlBar (above) takes over once active */}
-              <button type="button" onClick={onLiveToggle} disabled={micState === 'transcribing'}
-                title="Start live voice"
-                className="p-2.5 min-w-[40px] min-h-[40px] rounded-full cursor-pointer transition-all active:scale-90 disabled:opacity-30 text-ink-faint hover:bg-violet-tint hover:text-violet">
-                <Radio className="w-4 h-4" />
               </button>
 
               <button type="submit" disabled={(!inputText.trim() && pendingImages.length === 0) || micState === 'transcribing'}

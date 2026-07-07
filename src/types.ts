@@ -185,4 +185,8 @@ export interface Message {
   };
   /** Flag to indicate this message is being retried. */
   isRetrying?: boolean;
+  /** When true, renders the inline CheckoutWizardCard component. */
+  checkout_wizard?: boolean;
+  /** Order mode for the checkout wizard (gift or self). */
+  checkout_wizard_mode?: 'gift' | 'self';
 }

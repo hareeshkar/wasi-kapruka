@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Gift, Cake, Plus, ImagePlus, Send, X, ShoppingBag, Smartphone, Radio } from 'lucide-react';
+import { Gift, Cake, Plus, ImagePlus, Send, X, ShoppingBag, Smartphone, Mic } from 'lucide-react';
 import type { Message } from '../types';
 import WasiRobot from './WasiRobot';
 import LiveControlBar from './LiveControlBar';
@@ -286,10 +286,10 @@ export default function EmptyStatePlaceholder({
       <div className="relative z-10 flex flex-col items-center w-full max-w-[820px] px-6 animate-fadeInUp">
 
         {/* 3D Wasi Robot — interactive, tracks mouse + text caret */}
-        <WasiRobot inputRef={inputRef} width={240} height={280} />
+        <WasiRobot inputRef={inputRef} width={180} height={210} />
 
         {/* Greeting */}
-        <div className="text-center mb-4 px-4 py-2">
+        <div className="text-center mb-2 px-4 py-1">
           {/* Eyebrow */}
           <div className="flex items-center justify-center gap-2 mb-3 animate-fadeInUp" style={{ animationDelay: '0.1s' }}>
             <div className="h-px w-8" style={{ background: 'linear-gradient(to right, transparent, rgba(64,41,112,0.20))' }} />
@@ -298,7 +298,7 @@ export default function EmptyStatePlaceholder({
           </div>
 
           {/* Main greeting */}
-          <h1 className={`mb-2 animate-fadeInUp ${lang === 'si' ? 'font-sinhala font-bold text-2xl' : lang === 'ta' ? 'font-tamil font-bold text-2xl' : 'font-sans font-bold text-[32px] sm:text-[38px] tracking-tight'}`}
+          <h1 className={`mb-1 animate-fadeInUp ${lang === 'si' ? 'font-sinhala font-bold text-2xl' : lang === 'ta' ? 'font-tamil font-bold text-2xl' : 'font-sans font-bold text-[26px] sm:text-[32px] tracking-tight'}`}
             style={{ color: '#1a1a2e', animationDelay: '0.2s' }}>
             {displayName ? (
               <>{t('hiName', lang)} <span style={{ fontFamily: '"Fraunces", Georgia, serif', color: '#402970', fontStyle: 'italic' }}>{displayName}</span>, {t('imWasi', lang)}</>
@@ -309,12 +309,12 @@ export default function EmptyStatePlaceholder({
 
           {/* Rotating subtitle */}
           <div className="flex items-center justify-center gap-2 flex-wrap animate-fadeInUp" style={{ animationDelay: '0.35s' }}>
-            <span className={`text-[20px] sm:text-[24px] font-medium ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`} style={{ color: 'rgba(64,41,112,0.55)' }}>
+            <span className={`text-[17px] sm:text-[20px] font-medium ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`} style={{ color: 'rgba(64,41,112,0.55)' }}>
               {t('letsFind', lang)}
             </span>
-            <span className="inline-flex items-center overflow-visible relative" style={{ minWidth: '220px', paddingTop: '0.15em', paddingBottom: '0.15em', width: 'fit-content' }}>
+            <span className="inline-flex items-center overflow-visible relative" style={{ paddingTop: '0.15em', paddingBottom: '0.15em', width: 'fit-content' }}>
               <span
-                className={`text-[20px] sm:text-[24px] font-semibold ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : 'font-display italic'}`}
+                className={`text-[17px] sm:text-[20px] font-semibold ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : 'font-display italic'}`}
                 style={{
                   color: '#402970',
                   opacity: phraseVisible ? 1 : 0,
@@ -329,33 +329,33 @@ export default function EmptyStatePlaceholder({
         </div>
 
         {/* Cards — 4 columns */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 w-full mb-6 px-1">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full mb-4 px-1">
           {CARDS.map(({ icon: Icon, bg, color, query, copy }, i) => {
             const c = copy[lang] ?? copy.en;
             return (
               <button
                 key={query}
                 onClick={() => handleCardClick(query)}
-                className="group text-left rounded-2xl p-3 sm:p-4 transition-all duration-300 cursor-pointer border border-transparent hover:border-violet/10 active:scale-[0.97] animate-fadeInUp flex flex-col"
+                className="group text-left rounded-2xl p-2.5 sm:p-3 transition-all duration-300 cursor-pointer border border-transparent hover:border-violet/10 active:scale-[0.97] animate-fadeInUp flex flex-col"
                 style={{
                   background: 'rgba(255,255,255,0.75)',
                   backdropFilter: 'blur(10px)',
                   boxShadow: '0 2px 8px rgba(64,41,112,0.06), 0 1px 2px rgba(0,0,0,0.03)',
                   animationDelay: `${0.4 + i * 0.10}s`,
                   animationFillMode: 'both',
-                  minHeight: '120px',
+                  minHeight: '92px',
                 }}
               >
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center mb-2 sm:mb-3 transition-all duration-250 group-hover:-translate-y-1 group-hover:scale-110 group-hover:shadow-md" style={{ background: bg }}>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center mb-1.5 sm:mb-2 transition-all duration-250 group-hover:-translate-y-1 group-hover:scale-110 group-hover:shadow-md" style={{ background: bg }}>
                   <Icon className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color }} />
                 </div>
                 <h3
-                  className={`font-semibold text-ink mb-1.5 leading-snug break-words ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`}
-                  style={{ fontSize: 'clamp(12px, 2.8vw, 14px)', textWrap: 'balance' }}
+                  className={`font-semibold text-ink mb-1 leading-snug break-words ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`}
+                  style={{ fontSize: 'clamp(11px, 2.6vw, 13px)', textWrap: 'balance' }}
                 >{c.title}</h3>
                 <p
                   className={`font-medium leading-relaxed break-words line-clamp-2 ${lang === 'si' ? 'font-sinhala' : lang === 'ta' ? 'font-tamil' : ''}`}
-                  style={{ fontSize: 'clamp(10px, 2.4vw, 12px)', color: 'rgba(64,41,112,0.45)', textWrap: 'balance' }}
+                  style={{ fontSize: 'clamp(9px, 2.2vw, 11px)', color: 'rgba(64,41,112,0.45)', textWrap: 'balance' }}
                 >{c.body}</p>
               </button>
             );
@@ -363,7 +363,7 @@ export default function EmptyStatePlaceholder({
         </div>
 
         {/* Input Composer */}
-        <div className="w-full max-w-[600px] animate-fadeInUp" style={{ animationDelay: '0.75s' }}>
+        <div className="w-full max-w-[600px] animate-fadeInUp" style={{ animationDelay: '0.6s' }}>
           {isRecording && (
             <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl mb-2.5" style={{ background: 'rgba(254,226,226,0.6)', border: '1px solid rgba(244,63,94,0.15)' }}>
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0" />
@@ -438,26 +438,27 @@ export default function EmptyStatePlaceholder({
                     <X className="w-[17px] h-[17px]" />
                   </button>
                 )}
-                <button type="button" onClick={onLiveToggle} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet/6 transition-colors cursor-pointer" style={{ color: 'rgba(64,41,112,0.35)' }} title="Start live voice">
-                  <Radio className="w-[17px] h-[17px]" />
+                <button type="button" onClick={onLiveToggle} className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer active:scale-90"
+                  style={{ background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)', boxShadow: '0 2px 10px rgba(64,41,112,0.30)' }} title="Start live voice">
+                  <div className="flex items-center gap-[2px] h-3">
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} className="w-[2px] rounded-full bg-white" style={{ height: i === 1 ? '12px' : '8px', opacity: 0.9, animation: `waveBar 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+                    ))}
+                  </div>
                 </button>
                 <button type="submit" className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer"
                   style={isRecording
                     ? { background: 'linear-gradient(135deg, #DC3545 0%, #BD2130 100%)', boxShadow: '0 3px 10px rgba(220,53,69,0.30)' }
                     : hasContent
                       ? { background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)', boxShadow: '0 3px 10px rgba(64,41,112,0.25)' }
-                      : { background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 50%, #2D1B69 100%)', boxShadow: '0 2px 8px rgba(64,41,112,0.18)' }
+                      : { background: 'rgba(0,0,0,0.04)' }
                   }>
                   {isRecording ? (
                     <div className="w-3 h-3 rounded-[2px] bg-white" style={{ animation: 'pulseViolet 1s ease-in-out infinite' }} />
                   ) : hasContent ? (
                     <Send className="w-3.5 h-3.5 text-white" />
                   ) : (
-                    <div className="flex items-center gap-[2px] h-3">
-                      {[0, 1, 2].map((i) => (
-                        <span key={i} className="w-[2px] rounded-full bg-white" style={{ height: i === 1 ? '11px' : '7px', opacity: 0.85, animation: `waveBar 1.2s ease-in-out ${i * 0.15}s infinite` }} />
-                      ))}
-                    </div>
+                    <Mic className="w-[17px] h-[17px]" style={{ color: 'rgba(64,41,112,0.45)' }} />
                   )}
                 </button>
               </div>
@@ -465,18 +466,37 @@ export default function EmptyStatePlaceholder({
             )}
           </form>
 
-          {/* Voice hands-free hint */}
+          {/* Live voice CTA — premium pill with animated waveform */}
           {onSendVoice && (
-            <div className="mt-3 flex items-center justify-center gap-1.5 animate-fadeInUp" style={{ animationDelay: '0.85s' }}>
-              <div className="flex items-center gap-[2px] h-3">
-                {[0, 1, 2].map((i) => (
-                  <span key={i} className="w-[2px] rounded-full" style={{ height: i === 1 ? '10px' : '6px', background: 'rgba(64,41,112,0.20)', animation: `waveBar 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+            <button type="button" onClick={onLiveToggle}
+              className="mt-3 group relative flex items-center gap-3 mx-auto px-5 py-3 rounded-full cursor-pointer transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] animate-fadeInUp overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(64,41,112,0.90) 0%, rgba(91,62,138,0.95) 50%, rgba(64,41,112,0.90) 100%)',
+                boxShadow: '0 4px 20px rgba(64,41,112,0.25), 0 0 0 1px rgba(255,255,255,0.08) inset',
+                animationDelay: '0.85s',
+              }}>
+              {/* Shimmer overlay */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.08) 50%, transparent 60%)' }} />
+              {/* Waveform */}
+              <div className="flex items-center gap-[2.5px] h-4 relative z-10">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <span key={i} className="w-[2.5px] rounded-full bg-white" style={{
+                    height: i === 0 || i === 4 ? '8px' : i === 2 ? '16px' : '12px',
+                    opacity: i === 2 ? 1 : 0.75,
+                    animation: `waveBar 1.0s ease-in-out ${i * 0.10}s infinite`,
+                  }} />
                 ))}
               </div>
-              <span className="text-[10px] font-mono" style={{ color: 'rgba(64,41,112,0.30)' }}>
-                {lang === 'en' ? 'Tap mic for a fully hands-free experience' : lang === 'si' ? 'Mic එක tap කරන්න hands-free අත්දැකීමක් සඳහා' : 'Mic-ஐ அழுத்தி hands-free அனுபவத்தைப் பெறுங்கள்'}
+              {/* Text */}
+              <span className="text-[12px] font-semibold tracking-wide text-white/90 relative z-10">
+                {lang === 'en' ? 'Go hands-free with live voice' : lang === 'si' ? 'Live voice එකෙන් hands-free වෙන්න' : 'Live voice-ல் hands-free ஆகுங்கள்'}
               </span>
-            </div>
+              {/* Chevron */}
+              <svg className="w-3.5 h-3.5 text-white/50 group-hover:text-white/80 group-hover:translate-x-0.5 transition-all relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           )}
 
           {!isSignedIn && (

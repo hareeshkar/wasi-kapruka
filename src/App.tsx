@@ -2293,6 +2293,7 @@ ${voiceInstructions}`;
               orderIntent={orderIntent}
               onPay={() => { setIsCartOpen(false); setPaymentModalOpen(true); }}
               preferredCurrency={userCurrency}
+              onClose={() => setIsCartOpen(false)}
             />
           </div>
         </div>

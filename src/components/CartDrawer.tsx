@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CartItem, City, DeliveryCheckResult, Order, OrderIntent } from '../types';
-import { ShoppingBag, MapPin, Calendar, User, Phone, FileText, CheckCircle2, Ticket, AlertCircle, RefreshCw, Sparkles, Trash2, Smartphone, Gift, Home, Building2, Briefcase, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { ShoppingBag, MapPin, Calendar, User, Phone, FileText, CheckCircle2, Ticket, AlertCircle, RefreshCw, Sparkles, Trash2, Smartphone, Gift, Home, Building2, Briefcase, Eye, EyeOff, ChevronDown, X } from 'lucide-react';
 import { KaprukaLogo } from '../lib/kapruka';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
 import OrderConfirmationCard from './OrderConfirmationCard';
@@ -42,6 +42,7 @@ interface CartDrawerProps {
   orderIntent?: OrderIntent | null;
   onPay?: (order?: any) => void;
   preferredCurrency?: string;
+  onClose?: () => void;
 }
 
 export default function CartDrawer({
@@ -60,6 +61,7 @@ export default function CartDrawer({
   orderIntent,
   onPay,
   preferredCurrency,
+  onClose,
 }: CartDrawerProps) {
   // Recipient info states
   const [recipientName, setRecipientName] = useState('');
@@ -238,7 +240,7 @@ export default function CartDrawer({
     if (prev.anonymous !== undefined) setAnonymous(prev.anonymous);
     if (prev.order_mode) setOrderMode(prev.order_mode);
     // Trigger city search
-    if (prev.city_name && !selectedCity) {
+    if (prev.city_name && prev.city_name !== selectedCity?.name) {
       cityFromIntent.current = true;
       setCityQuery(prev.city_name);
     }
@@ -371,18 +373,29 @@ export default function CartDrawer({
             {getLoc('title')}
           </h2>
         </div>
-        {cart.length > 0 && (
-          <button
-            onClick={() => {
-              if (window.confirm('Clear all items from your bundle? This cannot be undone.')) {
-                onClearCart();
-              }
-            }}
-            className="text-[10px] font-mono text-rose-600 hover:underline flex items-center gap-1 cursor-pointer font-bold"
-          >
-            <Trash2 className="w-3 h-3" /> CLEAR
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {cart.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm('Clear all items from your bundle? This cannot be undone.')) {
+                  onClearCart();
+                }
+              }}
+              className="text-[10px] font-mono text-rose-600 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+            >
+              <Trash2 className="w-3 h-3" /> CLEAR
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              aria-label="Close cart"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Cart Items List */}
