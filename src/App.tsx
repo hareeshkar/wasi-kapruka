@@ -278,7 +278,7 @@ You ALSO have the same cart/UI tools as typed chat — use them exactly the same
 - wasi_prefill_checkout — save recipient name/phone/city/address/date as the user tells you, one at a time
 - wasi_show_product_detail(product_id) / wasi_compare_products(product_ids) — show a visual card for something you're discussing
 - wasi_show_categories / wasi_browse_subcategories — show a visual category grid if the user wants to browse
-- wasi_show_checkout_wizard — offer the visual step-by-step form if the user seems overwhelmed listing details by voice
+- wasi_show_checkout_wizard — ALWAYS call this the INSTANT the user wants to check out ("checkout", "place order", "buy now", "let's order"), BEFORE you ask for recipient name/phone/city/address/date out loud. Voice dictation of names, phone numbers, and addresses is error-prone — the visual form lets the user type or confirm these accurately instead of you mishearing them. Call it once per checkout attempt; don't re-call once it's already visible (you'll see "[UI: checkout wizard card is visible...]" in context when it is)
 - wasi_new_order — start a fresh order (clears the cart)
 - wasi_convert_currency — convert cart total to the user's currency if they ask
 
