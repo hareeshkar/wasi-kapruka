@@ -4,14 +4,16 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSanitize from 'rehype-sanitize';
 import TextareaAutosize from 'react-textarea-autosize';
-import { Message, Product, City, Order } from '../types';
-import { Send, ImagePlus, Play, Pause } from 'lucide-react';
+import { Message, Product, City, Order, OrderIntent, CartItem } from '../types';
+import { Send, ImagePlus, Play, Pause, Radio } from 'lucide-react';
 import { formatPrice, detectCurrency, type Currency } from '../lib/currency';
 import ProductCard from './ProductCard';
 import OrderConfirmationCard from './OrderConfirmationCard';
 import OrderTrackingCard from './OrderTrackingCard';
 import ProductComparisonCard from './ProductComparisonCard';
 import CategoryExplorer from './CategoryExplorer';
+import CheckoutWizardCard from './CheckoutWizardCard';
+import LiveControlBar from './LiveControlBar';
 import WasiRobotAvatar from './WasiRobotAvatar';
 import CodeBlock from './chat/CodeBlock';
 import ImageLightbox from './chat/ImageLightbox';
@@ -42,11 +44,24 @@ interface ChatSectionProps {
   onViewDetails?: (productCode: string) => void;
   onQuickReply: (text: string) => void;
   cartSize?: number;
-  cartItems?: { product_code: string; quantity: number }[];
+  cartItems?: CartItem[];
   /** Mobile only: notify parent when the composer gains/loses focus, so the bottom tab bar can tuck away while typing */
   onComposerFocusChange?: (focused: boolean) => void;
   /** Open in-app payment modal for order checkout */
   onPay?: (order: any) => void;
+  /** Callback when the checkout wizard is completed with all recipient details */
+  onCheckoutWizardComplete?: (data: OrderIntent) => void;
+  /** Current order intent from chat (for auto-filling the wizard) */
+  orderIntent?: OrderIntent | null;
+  /** Open the cart drawer */
+  onOpenCart?: () => void;
+  /** Live voice mode */
+  onLiveToggle?: () => void;
+  isLiveActive?: boolean;
+  liveState?: 'idle' | 'connecting' | 'active' | 'disconnecting' | 'error';
+  liveIsMuted?: boolean;
+  onLiveToggleMic?: () => void;
+  liveElapsedLabel?: string;
 }
 
 type ChatPhase = 'discovery' | 'browsing' | 'cart' | 'postorder';
@@ -100,6 +115,8 @@ const isProgressMessage = (content: string): boolean => {
 export default function ChatSection({
   messages, isStreaming, onSendMessage, onSendVoice, onRetryMessage, onAddMessage, onUpdateMessage,
   onNewChat, lang, onAddToBundle, onViewDetails, onQuickReply, cartSize = 0, cartItems = [], onComposerFocusChange, onPay,
+  onCheckoutWizardComplete, orderIntent, onOpenCart, onLiveToggle, isLiveActive,
+  liveState, liveIsMuted, onLiveToggleMic, liveElapsedLabel,
 }: ChatSectionProps) {
   const [inputText, setInputText] = useState('');
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -634,6 +651,19 @@ export default function ChatSection({
                           ))}
                         </div>
                       )}
+
+                      {/* Checkout wizard (inline multi-step form) */}
+                      {msg.checkout_wizard && (
+                        <div className="mt-2">
+                          <CheckoutWizardCard
+                            orderMode={msg.checkout_wizard_mode ?? 'gift'}
+                            initialData={orderIntent}
+                            cart={cartItems}
+                            onComplete={(data) => onCheckoutWizardComplete?.(data)}
+                            onOpenCart={onOpenCart}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -736,6 +766,15 @@ export default function ChatSection({
               </div>
             )}
 
+            {isLiveActive ? (
+              <LiveControlBar
+                state={liveState ?? 'idle'}
+                isMuted={!!liveIsMuted}
+                elapsedLabel={liveElapsedLabel ?? '00:00'}
+                onToggleMic={() => onLiveToggleMic?.()}
+                onEnd={() => onLiveToggle?.()}
+              />
+            ) : (
             <div className="chat-composer-pill flex items-center gap-1.5 rounded-full pl-2 pr-1.5 py-1 min-h-[48px]">
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={handleImageSelect} />
 
@@ -779,12 +818,20 @@ export default function ChatSection({
                 )}
               </button>
 
+              {/* Live voice mode button — only rendered while not live; LiveControlBar (above) takes over once active */}
+              <button type="button" onClick={onLiveToggle} disabled={micState === 'transcribing'}
+                title="Start live voice"
+                className="p-2.5 min-w-[40px] min-h-[40px] rounded-full cursor-pointer transition-all active:scale-90 disabled:opacity-30 text-ink-faint hover:bg-violet-tint hover:text-violet">
+                <Radio className="w-4 h-4" />
+              </button>
+
               <button type="submit" disabled={(!inputText.trim() && pendingImages.length === 0) || micState === 'transcribing'}
                 className="p-2.5 min-w-[40px] min-h-[40px] rounded-full cursor-pointer transition-all active:scale-90 disabled:opacity-25 disabled:cursor-not-allowed"
                 style={(inputText.trim() || pendingImages.length > 0) ? { background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)', boxShadow: '0 3px 12px rgba(64,41,112,0.35)' } : { background: '#e5e7eb' }}>
                 <Send className={`w-3.5 h-3.5 ${(inputText.trim() || pendingImages.length > 0) ? 'text-white' : 'text-gray-400'}`} />
               </button>
             </div>
+            )}
           </form>
         </div>
       </div>
