@@ -96,7 +96,10 @@ export default function App() {
       addMessage: (msg) => { void addMessage(msg); },
       updateMessage: (id, updates) => { void updateMessage(id, updates); },
       newId: () => crypto.randomUUID(),
-      now: () => new Date().toISOString(),
+      // Match ChatSection's typed-message timestamp format (toLocaleTimeString)
+      // rather than a raw ISO string — the two are rendered by the same
+      // <span>{msg.timestamp}</span> in ChatSection.tsx, so they must agree.
+      now: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     })
   );
 

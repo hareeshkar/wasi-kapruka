@@ -2436,12 +2436,14 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
       const { systemPrompt } = req.body || {};
 
       const { GoogleGenAI } = await import('@google/genai');
+      const { LIVE_VOICE_TOOL_DECLARATIONS, toGeminiFunctionDeclaration } = await import('./src/lib/tool-declarations.js');
       const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } });
 
       const liveConfig: Record<string, any> = {
         responseModalities: ['AUDIO'],
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        tools: [{ functionDeclarations: LIVE_VOICE_TOOL_DECLARATIONS.map(toGeminiFunctionDeclaration) }],
       };
       if (systemPrompt) {
         liveConfig.systemInstruction = { parts: [{ text: systemPrompt }] };

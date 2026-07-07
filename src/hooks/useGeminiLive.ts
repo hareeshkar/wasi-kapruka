@@ -24,6 +24,7 @@
 
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
+import { LIVE_VOICE_TOOL_DECLARATIONS, toGeminiFunctionDeclaration } from '../lib/tool-declarations';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,11 +324,14 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
       });
 
       // 3. Build config — MUST match the liveConnectConstraints.config the
-      // server locked into the token (see server.ts /api/live-token).
+      // server locked into the token (see server.ts /api/live-token),
+      // including the tool declarations (without these, the model has
+      // nothing to call and answers from memory instead of real data).
       const config: Record<string, any> = {
         responseModalities: ['AUDIO'],
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        tools: [{ functionDeclarations: LIVE_VOICE_TOOL_DECLARATIONS.map(toGeminiFunctionDeclaration) }],
       };
       if (opts.systemPrompt) {
         config.systemInstruction = { parts: [{ text: opts.systemPrompt }] };
