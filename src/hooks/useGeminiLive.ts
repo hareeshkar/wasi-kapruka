@@ -402,6 +402,17 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
               return;
             }
 
+            // Input transcription (user speech → show in chat). Appended
+            // BEFORE ending the user's turn below: a single serverContent
+            // event can carry both inputTranscription and model output
+            // together (native-audio models send multiple parts per event),
+            // so this fragment must land on the still-open user message
+            // before that turn is closed — otherwise it re-opens a stray
+            // new user bubble after the model has already started replying.
+            if (content.inputTranscription?.text) {
+              callbacksRef.current.onUserTranscript(content.inputTranscription.text);
+            }
+
             // Any model content means the model has started responding —
             // the user's turn is over. Close it before appending the
             // model's content so the two don't merge into one message.
@@ -422,11 +433,6 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
                   }
                 }
               }
-            }
-
-            // Input transcription (user speech → show in chat)
-            if (content.inputTranscription?.text) {
-              callbacksRef.current.onUserTranscript(content.inputTranscription.text);
             }
 
             // Output transcription (model speech → show in chat)
