@@ -2455,6 +2455,10 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
       // between token fetch and connect() don't get rejected.
       const newSessionExpireTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
+      const toolNames = LIVE_VOICE_TOOL_DECLARATIONS.map(t => t.name);
+      console.log(`[Live/Token] Creating token — model=gemini-3.1-flash-live-preview tools=[${toolNames.join(', ')}] hasSystemPrompt=${!!systemPrompt}`);
+      console.log('[Live/Token] liveConnectConstraints.config:', JSON.stringify(liveConfig, null, 2));
+
       const token = await ai.authTokens.create({
         config: {
           uses: 1,
@@ -2466,6 +2470,7 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
         },
       });
 
+      console.log(`[Live/Token] Token created: ${token.name} (newSessionExpireTime=${newSessionExpireTime})`);
       res.json({ token: token.name, expiresAt: Date.now() + 5 * 60 * 1000 });
     } catch (err: any) {
       console.error('[Live] Token generation failed:', sanitizeError(err));
@@ -2495,11 +2500,13 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
 
       if (VIRTUAL_TOOLS.includes(name)) {
         // Virtual tools return their args as-is (client processes them)
+        console.log(`  ← [Live/Tool] ${name} (virtual, echoed back)`);
         return res.json({ result: { _virtual: true, ...args } });
       }
 
       // MCP tools — execute on server
       const result = await callMcpTool(name, args || {}, false);
+      console.log(`  ← [Live/Tool] ${name} result:`, JSON.stringify(result).substring(0, 200));
       res.json({ result });
     } catch (err: any) {
       console.error('[Live] Tool execution failed:', sanitizeError(err));

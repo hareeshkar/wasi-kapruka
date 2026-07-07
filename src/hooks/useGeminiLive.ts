@@ -337,6 +337,9 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
         config.systemInstruction = { parts: [{ text: opts.systemPrompt }] };
       }
 
+      console.log(`[Live] Connecting — model=gemini-3.1-flash-live-preview tools=[${LIVE_VOICE_TOOL_DECLARATIONS.map(t => t.name).join(', ')}] hasSystemPrompt=${!!opts.systemPrompt} historyTurns=${opts.history?.length ?? 0}`);
+      console.log('[Live] connect() config:', JSON.stringify(config, null, 2));
+
       // 4. Connect via WebSocket. ai.live.connect() resolves as soon as the
       // WebSocket opens — NOT once the server has processed setup. Sending
       // realtime input (mic audio) before the server's own setupComplete
@@ -375,12 +378,14 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
             // Server has finished processing setup — safe to send realtime
             // input (mic audio, client content) from this point on.
             if (msg.setupComplete) {
+              console.log('[Live] setupComplete received — session accepted the connect() config (tools included)');
               resolveSetupComplete();
               return;
             }
 
             // ── Tool calls from the model ───────────────────────────────
             if (msg.toolCall?.functionCalls) {
+              console.log('[Live] toolCall received:', msg.toolCall.functionCalls.map((fc: any) => `${fc.name}(${JSON.stringify(fc.args)})`).join(', '));
               for (const fc of msg.toolCall.functionCalls) {
                 executeToolCall(fc.id, fc.name, fc.args);
               }
@@ -452,6 +457,7 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
 
           onerror: (e: any) => {
             const msg = e?.message || String(e) || 'WebSocket error';
+            console.error('[Live] WebSocket error — full event:', e);
             console.error('[Live] WebSocket error:', msg);
             cleanup();
             setState('error');
@@ -461,7 +467,10 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
 
           onclose: (e: any) => {
             const reason = e?.reason || e?.code || 'unknown';
-            console.log('[Live] WebSocket closed:', reason, 'code:', e?.code, 'wasClean:', e?.wasClean);
+            console.log('[Live] WebSocket closed — reason:', reason, '| code:', e?.code, '| wasClean:', e?.wasClean);
+            if (e?.code === 1007) {
+              console.warn('[Live] Code 1007 = "invalid argument" — the connect() config above did not match the token\'s locked liveConnectConstraints.config. Compare the "[Live] connect() config" log against the "[Live/Token] liveConnectConstraints.config" server log for the field that differs.');
+            }
             cleanup();
             setState('idle');
             callbacksRef.current.onEnd?.();
