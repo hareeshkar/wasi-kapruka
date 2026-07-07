@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "test:mcp": "node tests/mcp-live.test.js",
     "test:smoke": "node spock-test.js",
-    "test:all": "npm run test:mcp && npm run test:smoke"
+    "test:live-router": "tsx tests/live-transcript-router.test.js",
+    "test:all": "npm run test:mcp && npm run test:smoke && npm run test:live-router"
   },
   "dependencies": {
     "@google/genai": "^2.8.0",
