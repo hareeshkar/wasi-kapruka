@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, Product, Order, City, OrderIntent } from './types';
 import { Zap, ShoppingBag, X, Plus, Globe, LogIn, LogOut, PanelLeftClose, Package, MapPin, Calendar, User } from 'lucide-react';
 import { KaprukaLogo } from './lib/kapruka';
@@ -20,6 +20,8 @@ import { useAuth } from './hooks/useAuth';
 import { useUserProfile, missingOptionalFields } from './hooks/useUserProfile';
 import { migrateGuestDataToUser } from './lib/auth-migration';
 import { profileToContext } from './lib/user-profile';
+import { useGeminiLive } from './hooks/useGeminiLive';
+import { createLiveTranscriptRouter } from './lib/liveTranscriptRouter';
 
 // ── App-level sidebar copy ─────────────────────────────────────────────────
 // ⚠️ SI/TA translations need native-speaker review before shipping
@@ -87,6 +89,17 @@ export default function App() {
   messagesRef.current = messages;
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // Live voice mode — transcripts route into the same message thread as
+  // typed chat via the router below, instead of a separate feed.
+  const liveTranscriptRouterRef = useRef(
+    createLiveTranscriptRouter({
+      addMessage: (msg) => { void addMessage(msg); },
+      updateMessage: (id, updates) => { void updateMessage(id, updates); },
+      newId: () => crypto.randomUUID(),
+      now: () => new Date().toISOString(),
+    })
+  );
+
   // Error toast state
   const [errorToast, setErrorToast] = useState<{
     message: string;
@@ -96,6 +109,9 @@ export default function App() {
 
   // Auto-fill intent extracted from chat (recipient, city, address, phone, message)
   const [orderIntent, setOrderIntent] = useState<OrderIntent | null>(null);
+
+  // Checkout wizard state — set when LLM calls wasi_show_checkout_wizard
+  const [checkoutWizardMsg, setCheckoutWizardMsg] = useState<{ mode: 'gift' | 'self' } | null>(null);
 
   // Cart→AI feedback: last add/remove action is appended to next chat request then cleared
   const lastCartActionRef = useRef<string>('');
@@ -112,6 +128,154 @@ export default function App() {
 
   // Client-side cache for product details — avoids re-fetching on repeated clicks
   const productCache = useRef<Map<string, Product>>(new Map());
+
+  // ── Live voice mode ────────────────────────────────────────────────────────
+  const live = useGeminiLive({
+    onUserTranscript: (text) => {
+      liveTranscriptRouterRef.current.onFragment('user', text);
+    },
+    onModelTranscript: (text) => {
+      liveTranscriptRouterRef.current.onFragment('model', text);
+    },
+    onToolCall: (name, args) => {
+      console.log(`[Live/Tool] ${name}`, args);
+    },
+    onEnd: () => {
+      liveTranscriptRouterRef.current.reset();
+    },
+    onError: (msg, shouldFallback) => {
+      console.error('[Live] Error:', msg, shouldFallback ? '(fallback to text)' : '');
+      liveTranscriptRouterRef.current.reset();
+      if (shouldFallback) {
+        // Transcripts already live in the main thread — falling back to
+        // text is a continuation, not a reset. Say so in Wasi's own voice.
+        void addMessage({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Voice ended — ${msg}. Keep typing, I've got the full conversation.`,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        setErrorToast({ message: `Live error: ${msg}`, category: 'unknown', isRetryable: false });
+      }
+    },
+  });
+
+  // Live session elapsed-time label, driven off live.state (used by
+  // LiveControlBar instead of a separate timer component).
+  const [liveElapsed, setLiveElapsed] = useState(0);
+  useEffect(() => {
+    if (live.state !== 'active') { setLiveElapsed(0); return; }
+    const start = Date.now();
+    const id = setInterval(() => setLiveElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [live.state]);
+  const liveElapsedLabel = `${String(Math.floor(liveElapsed / 60)).padStart(2, '0')}:${String(liveElapsed % 60).padStart(2, '0')}`;
+
+  /**
+   * Build the Live session system prompt with full context.
+   * This mirrors the server-side WASI_SYSTEM_PROMPT but adds:
+   *  - Live-specific voice instructions (speak naturally, short responses)
+   *  - Cart contents and budget
+   *  - User profile (name, city, tone, preferences)
+   *  - Current date/time (Sri Lanka timezone)
+   */
+  const buildLiveSystemPrompt = useCallback(() => {
+    const nowLK = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Colombo' });
+    const [datePart, timePart] = nowLK.split(', ');
+    const tomorrowLK = new Date(Date.now() + 86_400_000)
+      .toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
+
+    // Cart context
+    const cartLines = cart.map(item =>
+      `${item.name} (code=${item.product_code}, Rs.${item.price_lkr}, qty=${item.quantity})`
+    );
+    const cartTotal = cart.reduce((sum, item) => sum + item.price_lkr * item.quantity, 0);
+    const cartContext = cartLines.length > 0
+      ? `\nCURRENT CART (${cartLines.length} items, total Rs.${cartTotal}):\n${cartLines.map(l => `- ${l}`).join('\n')}`
+      : '\nCART: empty';
+
+    // Budget context
+    const budgetContext = budget > 0 ? `\nUSER'S BUDGET: Rs.${budget}` : '';
+
+    // Profile context
+    const profileCtx = profileToContext(profile);
+    const profileContext = profile && profile.first_name
+      ? `\nUSER PROFILE: ${profileCtx}`
+      : '\nUSER: anonymous guest';
+
+    // Currency context
+    const currencyContext = userCurrency !== 'LKR'
+      ? `\nDISPLAY CURRENCY: ${userCurrency} (convert prices when mentioning them)`
+      : '';
+
+    // Live-specific voice instructions
+    const voiceInstructions = `
+VOICE MODE — CRITICAL RULES FOR SPOKEN RESPONSES:
+- You are speaking through a voice assistant. Keep responses SHORT (1-3 sentences max).
+- Do NOT use markdown, bullet points, or formatted text — this is audio.
+- Do NOT say "click here" or reference visual UI elements — the user can't see them.
+- Speak naturally, like a friend on the phone. Use contractions ("I'll", "don't", "it's").
+- When listing products, describe them verbally: "There's a beautiful rose bouquet for Rs.2500, and a chocolate hamper for Rs.3800."
+- When the user asks to add something, confirm verbally: "Done! I've added that to your cart."
+- If you need to ask a clarifying question, keep it to ONE question at a time.
+- For checkout, ask for details one by one: "What's the recipient's name?" then "Which city?" etc.
+- Match the user's language — if they speak Sinhala/Tamil/Tanglish, respond in that language.
+- Be decisive: "I'd go with the truffle cake — it's perfect for birthdays" not "Here are 9 options."`;
+
+    // Build the full prompt
+    return `You are Wasi — Kapruka's AI shopping bestie for Sri Lanka. You are a close friend who helps find anything from Kapruka's 120,000+ products.
+
+PERSONA: Warm, confident, concise. You celebrate Sri Lankan occasions with genuine enthusiasm. You speak the user's language — Sinhala, Tamil, Tanglish, or English. Be decisive — recommend, don't just list.
+
+EMOTIONAL INTELLIGENCE:
+- If the user is stressed (forgot anniversary, last-minute buyer), respond to the feeling FIRST, then give advice.
+- Match their energy: excited → celebrate, stressed → calm & fast, sad → gentle & no emojis.
+- Upsell like a friend: "if you're getting roses, a small chocolate box seals it" — only when it helps.
+- Be decisive: "get the truffle cake, she'll love it" — not "here are 9 options."
+
+CAPABILITIES — YOU HAVE TOOLS TO HELP:
+- Search products: kapruka_search_products(q, category, max_price, min_price, sort, limit)
+- Get product details: kapruka_get_product(product_id, currency)
+- List categories: kapruka_list_categories(depth)
+- Check delivery: kapruka_check_delivery(product_id, city_name, quantity)
+- List delivery cities: kapruka_list_delivery_cities(query)
+- Create order: kapruka_create_order(...)
+
+When the user asks about products, USE THE TOOLS. Don't just describe from memory.
+${cartContext}${budgetContext}${profileContext}${currencyContext}
+
+LIVE CLOCK — Asia/Colombo (use for ALL date calculations):
+Today: ${datePart}
+Tomorrow: ${tomorrowLK}
+Time now: ${timePart} (Sri Lanka Standard Time, UTC+5:30)
+
+${voiceInstructions}`;
+  }, [cart, budget, profile, userCurrency]);
+
+  /**
+   * Build conversation history for Live session context seeding.
+   * Sends the last N messages so the model has context from the text chat.
+   */
+  const buildLiveHistory = useCallback(() => {
+    // Send last 10 messages for context (not too many to avoid token waste)
+    const recentMessages = messages.slice(-10);
+    return recentMessages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      content: m.content || '',
+    })).filter(m => m.content.trim().length > 0);
+  }, [messages]);
+
+  const handleLiveToggle = useCallback(() => {
+    if (live.state === 'active' || live.state === 'connecting') {
+      live.disconnect();
+    } else {
+      const sysPrompt = buildLiveSystemPrompt();
+      const history = buildLiveHistory();
+      live.connect({ systemPrompt: sysPrompt, history });
+    }
+  }, [live, buildLiveSystemPrompt, buildLiveHistory]);
+  const isLiveActive = live.state === 'active' || live.state === 'connecting';
 
   // Normalize raw API product into our Product type
   const normalizeProductDetail = (raw: any, productCode: string): Product => ({
@@ -344,6 +508,8 @@ export default function App() {
     pendingParentCategory: string | null;
     shouldClearCart: boolean;
     shouldOrderNow: boolean;
+    shouldShowCheckoutWizard: boolean;
+    checkoutWizardMode: 'gift' | 'self';
     actions: ToolAction[];
   };
 
@@ -372,7 +538,9 @@ export default function App() {
       + (m.order_created ?
         `\n[UI: order confirmation card shown — order_ref=${m.order_created.order_ref}, total Rs.${m.order_created.total_lkr}]` : '')
       + (m.tracking_result ?
-        `\n[UI: order tracking card shown — order ${m.tracking_result.order_number ?? ''}, status: ${m.tracking_result.status_display ?? m.tracking_result.status ?? 'unknown'} — do NOT call kapruka_track_order for it again unless the user asks for an update]` : ''),
+        `\n[UI: order tracking card shown — order ${m.tracking_result.order_number ?? ''}, status: ${m.tracking_result.status_display ?? m.tracking_result.status ?? 'unknown'} — do NOT call kapruka_track_order for it again unless the user asks for an update]` : '')
+      + (m.checkout_wizard ?
+        `\n[UI: checkout wizard card is visible in chat — the user can fill details directly OR type/speak naturally. Continue calling wasi_prefill_checkout when they mention details (name, phone, city, address, date) to auto-fill the wizard. When all required fields are filled, the wizard shows a "Go to Cart" prompt automatically. Do NOT call wasi_show_checkout_wizard again if one is already visible.]` : ''),
   });
 
   /**
@@ -395,6 +563,8 @@ export default function App() {
     let pendingParentCategory: string | null = null;
     let shouldClearCart = false;
     let shouldOrderNow = false;
+    let shouldShowCheckoutWizard = false;
+    let checkoutWizardMode: 'gift' | 'self' = 'gift';
     const actions: ToolAction[] = [];
 
     // The adapter dedupes identical calls within one tool round, but the model
@@ -527,6 +697,12 @@ export default function App() {
         shouldClearCart = true;
       }
 
+      // ── V11: wasi_show_checkout_wizard ─────────────────────────────────
+      if (tc.toolName === 'wasi_show_checkout_wizard' && tc.result) {
+        shouldShowCheckoutWizard = true;
+        checkoutWizardMode = tc.result.order_mode === 'self' ? 'self' : 'gift';
+      }
+
       // ── Unrecognized tool name — log for debugging ─────────────────────
       const KNOWN_TOOLS = [
         'kapruka_search_products', 'kapruka_get_product', 'kapruka_list_delivery_cities',
@@ -536,7 +712,7 @@ export default function App() {
         'wasi_update_cart_quantity', 'wasi_show_progress', 'wasi_order_now',
         'wasi_show_product_detail', 'wasi_compare_products', 'wasi_show_categories',
         'wasi_browse_subcategories', 'wasi_new_order', 'wasi_get_form_state',
-        'wasi_get_cart', 'wasi_convert_currency',
+        'wasi_get_cart', 'wasi_convert_currency', 'wasi_show_checkout_wizard',
       ];
       if (!KNOWN_TOOLS.includes(tc.toolName)) {
         console.warn(`[processToolCalls] Unrecognized tool name: "${tc.toolName}" — result discarded. Possible LLM typo or new tool not yet integrated.`);
@@ -546,7 +722,8 @@ export default function App() {
     return {
       linkedProducts, lastSearchCursor, suggestedCities, orderCreated,
       trackingData, currentPrefill, pendingDetailId, pendingCompareIds,
-      pendingCategories, pendingParentCategory, shouldClearCart, shouldOrderNow, actions,
+      pendingCategories, pendingParentCategory, shouldClearCart, shouldOrderNow,
+      shouldShowCheckoutWizard, checkoutWizardMode, actions,
     };
   };
 
@@ -752,6 +929,8 @@ export default function App() {
         ? (state.currentPrefill || orderIntent || undefined)
         : data.toolCalls?.find((tc: any) => tc.toolName === 'wasi_prefill_checkout')?.result,
       search_cursor: state.lastSearchCursor,
+      checkout_wizard: state.shouldShowCheckoutWizard || undefined,
+      checkout_wizard_mode: state.shouldShowCheckoutWizard ? state.checkoutWizardMode : undefined,
     };
     void addMessage(replyMsg);
 
@@ -1318,6 +1497,29 @@ export default function App() {
     }
   };
 
+  // Checkout wizard completion — sends summary message and opens cart
+  const handleCheckoutWizardComplete = useCallback((data: OrderIntent) => {
+    // Update the order intent so CartDrawer gets prefilled
+    setOrderIntent(data);
+
+    // Send a summary message to chat
+    const summaryMsg: Message = {
+      id: `wizard-${Date.now()}`,
+      role: 'assistant',
+      content: `Hey, check your details before confirming:\n\n**${data.recipient_name}** in **${data.city_name}**\n📞 ${data.recipient_phone}\n🏠 ${data.delivery_address}\n📅 ${data.delivery_date}${data.gift_message ? `\n🎁 "${data.gift_message}"` : ''}\n\nHead to the cart to review and checkout!`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    void addMessage(summaryMsg);
+
+    // Open the cart drawer
+    setIsCartOpen(true);
+  }, [addMessage]);
+
+  // Open cart drawer
+  const handleOpenCart = useCallback(() => {
+    setIsCartOpen(true);
+  }, []);
+
   // Renew lock
   const handleRenewOrder = async () => {
     if (cart.length === 0) return;
@@ -1870,6 +2072,12 @@ export default function App() {
             onSendVoice={handleSendVoice}
             onAddMessage={addMessage}
             onUpdateMessage={updateMessage}
+            onLiveToggle={handleLiveToggle}
+            isLiveActive={isLiveActive}
+            liveState={live.state}
+            liveIsMuted={live.isMuted}
+            onLiveToggleMic={live.toggleMic}
+            liveElapsedLabel={liveElapsedLabel}
           />
         ) : (
           <ChatSection
@@ -1897,6 +2105,15 @@ export default function App() {
             cartItems={cart}
             onComposerFocusChange={setComposerFocused}
             onPay={(order) => { if (order) setOrderResult(order); setPaymentModalOpen(true); }}
+            onCheckoutWizardComplete={handleCheckoutWizardComplete}
+            orderIntent={orderIntent}
+            onOpenCart={handleOpenCart}
+            onLiveToggle={handleLiveToggle}
+            isLiveActive={isLiveActive}
+            liveState={live.state}
+            liveIsMuted={live.isMuted}
+            onLiveToggleMic={live.toggleMic}
+            liveElapsedLabel={liveElapsedLabel}
           />
         )}
         </div>
