@@ -30,7 +30,7 @@
 
 This isolates the "accumulate streaming fragments into one message, start a new message on the next turn" logic from React state, so it can be unit-tested without mounting the app.
 
-- [ ] **Step 1: Write the router module**
+- [x] **Step 1: Write the router module**
 
 ```typescript
 // src/lib/liveTranscriptRouter.ts
@@ -94,7 +94,7 @@ export function createLiveTranscriptRouter(handlers: LiveTranscriptHandlers): Li
 }
 ```
 
-- [ ] **Step 2: Write the test**
+- [x] **Step 2: Write the test**
 
 ```javascript
 // tests/live-transcript-router.test.js
@@ -149,12 +149,12 @@ async function run() {
 run().catch((err) => { console.error('FAIL:', err); process.exit(1); });
 ```
 
-- [ ] **Step 3: Run the test to verify it passes**
+- [x] **Step 3: Run the test to verify it passes**
 
 Run: `npx tsx tests/live-transcript-router.test.js`
 Expected: `PASS: live-transcript-router (6 assertions)`
 
-- [ ] **Step 4: Add the npm script and commit**
+- [x] **Step 4: Add the npm script and commit**
 
 Edit `package.json` scripts block, add after `"test:mcp"`:
 ```json
@@ -187,13 +187,13 @@ export interface LiveControlBarProps {
 - Consumed by: Task 4 (`ChatSection.tsx`), Task 5 (`EmptyStatePlaceholder.tsx`).
 - Consumes: `LiveState` type shape already defined in `src/hooks/useGeminiLive.ts` (structurally compatible, re-declared here to avoid a new cross-import — this component has no other dependency on the hook).
 
-- [ ] **Step 1: Delete the old panel**
+- [x] **Step 1: Delete the old panel**
 
 ```bash
 git rm src/components/LiveSessionPanel.tsx
 ```
 
-- [ ] **Step 2: Write `LiveControlBar.tsx`**
+- [x] **Step 2: Write `LiveControlBar.tsx`**
 
 ```tsx
 /**
@@ -309,12 +309,12 @@ export default function LiveControlBar({ state, isMuted, elapsedLabel, onToggleM
 }
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run lint`
 Expected: no new errors from `LiveControlBar.tsx` (errors from other in-progress files in this task set are expected until later tasks land — see Task 6 for the final all-green check).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/LiveControlBar.tsx src/components/LiveSessionPanel.tsx
@@ -332,7 +332,7 @@ git commit -m "feat: replace LiveSessionPanel overlay with inline LiveControlBar
 - Consumes: `createLiveTranscriptRouter` from `src/lib/liveTranscriptRouter.ts` (Task 1); `addMessage`, `updateMessage` from `useSupabaseChat` (already destructured at `App.tsx:87`); `live.state`, `live.isMuted`, `live.toggleMic`, `live.disconnect`, `live.connect` from `useGeminiLive` (existing).
 - Produces: `liveElapsedLabel: string` and passes `isLiveActive`, `liveState`, `onLiveToggle`, `onLiveToggleMic`, `onLiveEnd`, `liveElapsedLabel` as props to both `EmptyStatePlaceholder` and `ChatSection` (consumed by Tasks 4 and 5).
 
-- [ ] **Step 1: Replace the `liveTranscripts` state with the router**
+- [x] **Step 1: Replace the `liveTranscripts` state with the router**
 
 Find this block (current `App.tsx:92-94`):
 ```typescript
@@ -359,7 +359,7 @@ Add the import at the top with the other local imports:
 import { createLiveTranscriptRouter } from './lib/liveTranscriptRouter';
 ```
 
-- [ ] **Step 2: Update the `useGeminiLive` callbacks**
+- [x] **Step 2: Update the `useGeminiLive` callbacks**
 
 Find (current `App.tsx:126-150`):
 ```typescript
@@ -423,7 +423,7 @@ Replace with:
   });
 ```
 
-- [ ] **Step 3: Compute an elapsed-time label for the control bar**
+- [x] **Step 3: Compute an elapsed-time label for the control bar**
 
 Add near the `live` hook (after its declaration):
 ```typescript
@@ -437,7 +437,7 @@ Add near the `live` hook (after its declaration):
   const liveElapsedLabel = `${String(Math.floor(liveElapsed / 60)).padStart(2, '0')}:${String(liveElapsed % 60).padStart(2, '0')}`;
 ```
 
-- [ ] **Step 4: Replace the `LiveSessionPanel` render with nothing (deleted) and pass live props to both branches**
+- [x] **Step 4: Replace the `LiveSessionPanel` render with nothing (deleted) and pass live props to both branches**
 
 Find (current `App.tsx:2086-2094`):
 ```typescript
@@ -493,12 +493,12 @@ Update the existing `ChatSection`'s `onLiveToggle={...}` / `isLiveActive={...}` 
 ```
 (replacing the old two-line `onLiveToggle`/`isLiveActive` props with these six).
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run lint`
 Expected: errors only in `ChatSection.tsx`/`EmptyStatePlaceholder.tsx` for the new props not yet accepted (fixed in Tasks 4–5) — no errors in `App.tsx` itself.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/App.tsx
@@ -515,7 +515,7 @@ git commit -m "feat: route live transcripts through the message thread, add in-t
 **Interfaces:**
 - Consumes: `LiveControlBar` (Task 2), new props from `App.tsx` (Task 3): `liveState`, `liveIsMuted`, `onLiveToggleMic`, `liveElapsedLabel` (in addition to existing `onLiveToggle`, `isLiveActive`).
 
-- [ ] **Step 1: Add the import and extend the props interface**
+- [x] **Step 1: Add the import and extend the props interface**
 
 Add import:
 ```typescript
@@ -549,7 +549,7 @@ becomes:
   liveState, liveIsMuted, onLiveToggleMic, liveElapsedLabel,
 ```
 
-- [ ] **Step 2: Swap the composer pill for the control bar when live is active**
+- [x] **Step 2: Swap the composer pill for the control bar when live is active**
 
 Find (current `ChatSection.tsx:762`):
 ```tsx
@@ -575,12 +575,12 @@ and add the closing `)}` immediately after the existing pill's closing `</div>` 
           </form>
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run lint`
 Expected: no errors in `ChatSection.tsx`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/ChatSection.tsx
@@ -597,7 +597,7 @@ git commit -m "feat: render LiveControlBar in place of ChatSection composer when
 **Interfaces:**
 - Consumes: `LiveControlBar` (Task 2), same new props from `App.tsx` (Task 3) as `ChatSection`.
 
-- [ ] **Step 1: Add the import and extend the props interface**
+- [x] **Step 1: Add the import and extend the props interface**
 
 Add imports:
 ```typescript
@@ -649,7 +649,7 @@ lang = 'en', isSignedIn, userName, onSignIn, onNewChat, onSendMessage, onSendVoi
 onLiveToggle, isLiveActive, liveState, liveIsMuted, onLiveToggleMic, liveElapsedLabel,
 ```
 
-- [ ] **Step 2: Add the Live button next to the mic/send controls, and swap in the control bar**
+- [x] **Step 2: Add the Live button next to the mic/send controls, and swap in the control bar**
 
 Find (current `EmptyStatePlaceholder.tsx:392`, the composer pill open tag) and wrap the same way as Task 4 — change:
 ```tsx
@@ -689,12 +689,12 @@ Then add the Radio (live) button inside the pill's right-hand button group (curr
 ```
 (keep the existing `<button type="submit" ...>` immediately after, unchanged).
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run lint`
 Expected: no errors in `EmptyStatePlaceholder.tsx`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/EmptyStatePlaceholder.tsx
@@ -713,7 +713,7 @@ git commit -m "feat: add live-voice entry point and control bar to the empty-sta
 
 This test does **not** connect to a real Gemini Live session — it mocks `POST /api/live-token` to fail fast (simulating "no mic/network available in CI"), so it only verifies the UI doesn't crash when Live is triggered and gracefully surfaces the in-thread fallback message from Task 3. Real audio/voice verification is manual (per the project owner's instruction).
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 ```typescript
 // tests/live-ui-mock-flow.spec.ts
@@ -749,7 +749,7 @@ test('live entry point on empty state, and token failure falls back gracefully i
 });
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `npm run dev` (in one terminal), then in another: `npx playwright test tests/live-ui-mock-flow.spec.ts`
 Expected: 1 passed.
@@ -757,17 +757,17 @@ Expected: 1 passed.
 If Playwright isn't configured with a `baseURL`/webServer in this repo yet, check for a `playwright.config.ts`; if none exists, run with an explicit base URL instead:
 `npx playwright test tests/live-ui-mock-flow.spec.ts --config=<(echo "export default { use: { baseURL: 'http://localhost:3000' } }")` — or simpler, hardcode `page.goto('http://localhost:3000/')` in the test if no config exists (check the `dev` script's port in `server.ts` first).
 
-- [ ] **Step 3: Full project typecheck**
+- [x] **Step 3: Full project typecheck**
 
 Run: `npm run lint`
 Expected: 0 errors.
 
-- [ ] **Step 4: Run the existing test suite to confirm no regressions**
+- [x] **Step 4: Run the existing test suite to confirm no regressions**
 
 Run: `npm run test:live-router`
 Expected: `PASS: live-transcript-router (6 assertions)`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/live-ui-mock-flow.spec.ts
