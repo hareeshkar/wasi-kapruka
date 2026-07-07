@@ -13,10 +13,12 @@ Wasi is a trilingual, multimodal shopping assistant built on Kapruka's live MCP 
 | Product discovery | Search 120,000+ Kapruka SKUs with budget bands, category filters, pagination, and multi-currency pricing |
 | Visual browsing | Category grid (64+ categories), subcategory drill-down, inline product detail, side-by-side comparison |
 | Conversational checkout | Recipient, city, phone, address, date, and gift message captured from chat — not a static form |
+| Inline checkout wizard | Multi-step form rendered inline in chat; auto-fills from natural language; live delivery availability check |
 | Delivery validation | Real-time availability and fee checks; perishable warnings for cakes and flowers |
 | Price lock | 60-minute Kapruka checkout window with countdown, renew, copy link, and WhatsApp share |
 | Post-payment tracking | Timeline card with recipient, gift message, delivery photo/video flags |
-| Multimodal input | Text, voice (STT), and image upload (vision-guided search) |
+| Live voice mode | Real-time voice conversations via Gemini Live API — fully hands-free shopping with tool calling |
+| Multimodal input | Text, voice (STT), image upload (vision-guided search), and live voice sessions |
 | Persistence | Guest sessions and signed-in users; cart and chat history in Supabase |
 
 ---
@@ -26,7 +28,7 @@ Wasi is a trilingual, multimodal shopping assistant built on Kapruka's live MCP 
 Wasi runs a **dual-layer state machine** tuned for gift-commerce: a six-state decision engine in the system prompt, synchronized with client-side chat phases and rich UI cards.
 
 1. **Prompt-defined state machine** — governs every turn: Discovery → Evaluating → Collecting → Cart → Checkout → Post-order.
-2. **LLM function calling** — Gemini (default) selects from 20 declared tools per turn, with parallel execution where safe.
+2. **LLM function calling** — Gemini 3.1 Flash-Lite (default) selects from 22 declared tools per turn, with parallel execution where safe.
 3. **Client-side action dispatch** — tool results map directly to React state and purpose-built cards (products, cart, checkout, tracking).
 
 Every transition is observable in server logs. Latency stays low because commerce calls hit Kapruka MCP only when needed; UI mutations run through lightweight virtual tools on the client.
@@ -60,7 +62,56 @@ stateDiagram-v2
 
 ---
 
-## Tool Reference (20 total)
+## Live Voice Mode (Gemini Live API)
+
+Wasi supports real-time voice conversations via the **Gemini Live API** (`gemini-3.1-flash-live-preview`). Users tap the waveform button to enter a fully hands-free session — speak naturally, and Wasi searches products, adds to cart, fills checkout details, and places orders entirely through voice.
+
+### Architecture
+
+```
+Browser (useGeminiLive.ts)
+  ├─ Mic capture → PCM 16kHz → sendRealtimeInput
+  ├─ Receive audio → PCM 24kHz → AudioContext playback
+  ├─ Transcription fragments → liveTranscriptRouter → chat messages
+  └─ Tool calls → POST /api/live-tool → server MCP proxy → Kapruka
+```
+
+### Key components
+
+| File | Role |
+|------|------|
+| `src/hooks/useGeminiLive.ts` | Browser-side Gemini Live session manager (WebSocket, mic capture, audio playback, tool calling) |
+| `src/components/LiveControlBar.tsx` | Inline voice control bar — replaces text composer during live sessions (soul orb, mic toggle, end call) |
+| `src/lib/liveTranscriptRouter.ts` | Routes streaming transcript fragments into persisted chat messages |
+| `src/lib/tool-declarations.ts` | Canonical tool schemas shared between text-chat and live voice sessions |
+| `server.ts` `/api/live-token` | Ephemeral token endpoint — API key stays server-side |
+| `server.ts` `/api/live-tool` | Server-side tool execution proxy for live voice sessions |
+
+### Live voice tools (22 total)
+
+The live voice session uses a subset of the full tool set — all 7 Kapruka MCP tools plus 15 Wasi virtual tools, declared via `LIVE_VOICE_TOOL_DECLARATIONS` in `tool-declarations.ts`.
+
+### Session limits
+
+| Mode | Limit |
+|------|-------|
+| Audio-only | 15 minutes |
+| Audio+video | 2 minutes |
+| Connection lifetime | ~10 minutes (session resumption available) |
+
+### Voice UI states
+
+| State | Composer UI |
+|-------|-------------|
+| Idle | Waveform button (violet gradient) visible |
+| Connecting | `LiveControlBar` with "Connecting…" spinner |
+| Active | `LiveControlBar` with soul orb animation, mic toggle, elapsed time |
+| Disconnecting | "Ending…" state |
+| Error | Fallback with retry |
+
+---
+
+## Tool Reference (22 total)
 
 ### Kapruka MCP tools (7) — live wire to `mcp.kapruka.com`
 
@@ -74,13 +125,13 @@ stateDiagram-v2
 | `kapruka_create_order` | Guest checkout | `cart`, `recipient`, `delivery`, `sender`, `gift_message` | Order confirmation card |
 | `kapruka_track_order` | Post-payment tracking | `order_number` (VPAY… / KAP…, not ORD-) | Order tracking timeline card |
 
-### Wasi virtual tools (13) — client-side UI actions
+### Wasi virtual tools (15) — client-side UI actions
 
 Virtual tools never call Kapruka directly. The server echoes arguments; `App.tsx` applies side effects.
 
 | Tool | Purpose | UI / state effect |
 |------|---------|-------------------|
-| `wasi_prefill_checkout` | Capture delivery fields from chat | Updates `orderIntent` → CartDrawer form |
+| `wasi_prefill_checkout` | Capture delivery fields from chat | Updates `orderIntent` → CartDrawer form / CheckoutWizard |
 | `wasi_add_to_cart` | Consent-gated add to bundle | Supabase cart + badge count |
 | `wasi_remove_from_cart` | Remove line item | Cart drawer update |
 | `wasi_update_cart_quantity` | Change qty (0 = remove) | Cart drawer update |
@@ -93,8 +144,10 @@ Virtual tools never call Kapruka directly. The server echoes arguments; `App.tsx
 | `wasi_show_categories` | Top-level category grid | `CategoryExplorer` |
 | `wasi_browse_subcategories` | Subcategory list | `CategoryExplorer` with parent |
 | `wasi_new_order` | Reset session | Clear cart + intent |
+| `wasi_show_checkout_wizard` | Inline multi-step checkout form | `CheckoutWizardCard` in chat |
+| `wasi_convert_currency` | Real-time price conversion | Updated prices in cart/cards |
 
-Tool schemas are canonical in `src/lib/llm-adapter.ts` (`KAPRUKA_TOOL_DECLARATIONS`).
+Tool schemas are canonical in `src/lib/tool-declarations.ts` (`KAPRUKA_TOOL_DECLARATIONS`). Live voice uses `LIVE_VOICE_TOOL_DECLARATIONS` (same tools, different export for browser bundle compatibility).
 
 ---
 
@@ -134,9 +187,11 @@ Additional client caches: in-memory `productCache` (prefetch on search), `sessio
 |-------|------------|
 | Frontend | React 19, TypeScript, Vite 6, Tailwind CSS 4 |
 | Server | Express (`server.ts`), single process serves API + Vite in dev |
-| LLM | Gemini 3.1 Flash-Lite (default); swappable via `LLM_PROVIDER` |
+| LLM (text) | Gemini 3.1 Flash-Lite (default); swappable via `LLM_PROVIDER` |
+| LLM (voice) | Gemini 3.1 Flash Live (`gemini-3.1-flash-live-preview`) via WebSocket |
 | Database | Supabase (conversations, messages, cart, orders, profiles) |
 | Commerce | Kapruka MCP JSON-RPC at `https://mcp.kapruka.com/mcp` |
+| Motion | Framer Motion (`motion/react`) for LiveControlBar animations |
 
 ### Rich message rendering
 
@@ -151,9 +206,21 @@ Each chat message may attach structured data. `ChatSection` renders:
 | `order_created` | `OrderConfirmationCard` |
 | `tracking_result` | `OrderTrackingCard` |
 | `city_suggest` | Quick-reply city chips |
+| `checkout_wizard` | `CheckoutWizardCard` (inline multi-step form) |
 | `error` | `ErrorCard` with retry |
 
 Design system: `glass-bubble` surfaces, Kapruka violet palette (`#402970`), Fraunces display + JetBrains Mono data labels. Full tokens in `src/index.css`.
+
+### Checkout wizard
+
+`CheckoutWizardCard` renders an inline multi-step form in the chat when the LLM calls `wasi_show_checkout_wizard`. Features:
+
+- **Auto-fill from natural language** — fields populate as the user speaks or types details
+- **123 Sri Lankan cities** — searchable dropdown with live filtering
+- **Live delivery check** — availability validated when date + city are selected
+- **Icing text** — conditionally shown when cart contains a cake
+- **Gift/self toggle** — with anonymous option
+- **User-edit protection** — auto-filled fields are never overwritten if the user manually edits them
 
 ### Order confirmation card states
 
@@ -202,13 +269,18 @@ sequenceDiagram
 | `GET` | `/api/products` | Product search |
 | `GET` | `/api/products/:code` | Product detail |
 | `GET` | `/api/categories` | Category tree |
+| `GET` | `/api/categories/:category` | Subcategory drill-down |
 | `GET` | `/api/cities` | City search |
 | `POST` | `/api/check-delivery` | Delivery check |
 | `POST` | `/api/create-order` | Place order |
 | `POST` | `/api/track-order` | Track order |
-| `POST` | `/api/stt` | Voice transcription |
+| `POST` | `/api/convert-prices` | Multi-currency price conversion |
+| `POST` | `/api/stt` | Voice transcription (STT) |
+| `POST` | `/api/live-token` | Ephemeral Gemini Live API token |
+| `POST` | `/api/live-tool` | Server-side tool execution for live voice sessions |
 | `GET` | `/api/conversations` | List conversations |
 | `POST` | `/api/conversations` | Create conversation |
+| `POST` | `/api/conversations/:id/title` | Update conversation title |
 | `GET` | `/health` | Health check |
 
 ---
@@ -282,18 +354,33 @@ Health endpoint: `GET /health` returns provider and model name.
 
 ```
 wasi/
-├── server.ts              Express app, system prompt, REST routes, tool router
+├── server.ts                    Express app, system prompt, REST routes, tool router
 ├── src/
-│   ├── App.tsx            Root orchestrator, tool-call pipeline, cart/order state
-│   ├── components/        Chat UI, cards, cart drawer, modals
-│   ├── hooks/             Supabase chat, cart, auth, conversations
+│   ├── App.tsx                  Root orchestrator, tool-call pipeline, cart/order state
+│   ├── components/
+│   │   ├── ChatSection.tsx      Chat UI with live voice integration
+│   │   ├── CheckoutWizardCard.tsx  Inline multi-step checkout form
+│   │   ├── LiveControlBar.tsx   Live voice control bar (soul orb, mic toggle)
+│   │   ├── CartDrawer.tsx       Cart with delivery form, city search, close button
+│   │   ├── ProductCard.tsx      Product display cards
+│   │   ├── OrderConfirmationCard.tsx  Order confirmation with countdown
+│   │   ├── OrderTrackingCard.tsx    Post-payment tracking timeline
+│   │   ├── CategoryExplorer.tsx     Category/subcategory grid
+│   │   ├── EmptyStatePlaceholder.tsx  Landing page with robot + CTA
+│   │   └── WasiRobot.tsx        Interactive 3D robot (head tracking, expressions)
+│   ├── hooks/
+│   │   ├── useGeminiLive.ts     Gemini Live API session manager
+│   │   ├── useSupabaseCart.ts   Cart persistence
+│   │   └── useSupabaseChat.ts   Chat persistence
 │   ├── lib/
-│   │   ├── llm-adapter.ts Tool declarations + multi-provider LLM
-│   │   └── mcp.ts         Kapruka MCP client, cache, simulator
-│   └── types.ts           Domain models
-├── supabase/schema.sql    Database schema
-├── tests/mcp-live.test.js Live MCP verification
-└── WASI_STRESS_TEST_SHOWCASE.md  Extended feature matrix for judges
+│   │   ├── tool-declarations.ts Canonical tool schemas (shared text + live)
+│   │   ├── liveTranscriptRouter.ts  Live transcript → chat message routing
+│   │   ├── llm-adapter.ts       Multi-provider LLM (Gemini, OpenAI, Anthropic)
+│   │   └── mcp.ts               Kapruka MCP client, cache, simulator
+│   └── types.ts                 Domain models
+├── supabase/schema.sql          Database schema
+├── tests/mcp-live.test.js       Live MCP verification
+└── WASI_STRESS_TEST_SHOWCASE.md Extended feature matrix for judges
 ```
 
 ---
@@ -306,6 +393,7 @@ wasi/
 | Fonts | Noto Sans Sinhala / Tamil via `font-sinhala`, `font-tamil` classes |
 | LLM replies | Language lock in system prompt; mirrors user script |
 | STT | Code-switching preserved (Singlish / Tanglish) |
+| Live voice | Audio transcription in real-time; multilingual via Gemini |
 | City search | MCP accepts English, Sinhala, and Tamil queries |
 
 ---
@@ -314,9 +402,13 @@ wasi/
 
 **Dual-layer orchestration:** The prompt state machine handles conversational logic; the client phase system drives quick replies and card rendering. Both layers stay in sync without extra runtime infrastructure.
 
-**Virtual tools:** Kapruka MCP handles commerce; Wasi virtual tools handle UI mutations (cart, form prefill, progress, category grids) without polluting the MCP schema.
+**Virtual tools:** Kapruka MCP handles commerce; Wasi virtual tools handle UI mutations (cart, form prefill, progress, category grids, checkout wizard) without polluting the MCP schema.
 
-**Dual checkout paths:** Users can checkout from the cart drawer (form-driven) or from chat (`wasi_order_now`). Both hit the same `POST /api/create-order` endpoint with normalized MCP payloads.
+**Dual checkout paths:** Users can checkout from the cart drawer (form-driven), from chat (`wasi_order_now`), or via the inline checkout wizard. All hit the same `POST /api/create-order` endpoint with normalized MCP payloads.
+
+**Live voice parity:** The Gemini Live session uses the same 22 tool declarations as text-chat. Tool calls from voice go through `/api/live-tool` which executes the same MCP operations — zero behavioral difference between typing and speaking.
+
+**Tool declarations as shared module:** `src/lib/tool-declarations.ts` is imported by both server (for text-chat tool routing) and client (for live voice session config). This ensures the tool set stays synchronized across both modalities.
 
 **ORD- vs VPAY-:** `ORD-` references are pre-payment price locks from `create_order`. `VPAY…` / `KAP…` numbers from the Kapruka confirmation email are required for `track_order`.
 
