@@ -39,7 +39,7 @@ export interface ToolDeclaration {
 export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   {
     name: 'kapruka_search_products',
-    description: 'Search the Kapruka catalog (120,000+ products). Use simple English terms: "chocolate", "birthday cake", "rose", "hamper", "rice", "phone". Returns product list with ids, names, prices in LKR.',
+    description: 'Search the Kapruka catalog (120,000+ products). Use simple English terms, even if the user spoke Sinhala/Tamil/Tanglish — translate their intent to an English query first: "cake ekak ganna" → q="cake", "pathi rosa poo" → q="rose", "mokada chocolate thiyenne" → q="chocolate". Good queries: "chocolate", "birthday cake", "rose bouquet", "grocery hamper", "smartphone". Bad queries: single ambiguous words with no product meaning ("nice", "something"), or full sentences — strip filler words out first. For vague requests ("something nice for my mom"), infer a category from context (occasion + relationship) rather than asking a clarifying question first — search, THEN narrow down based on results. Returns product list with ids, names, prices in LKR.',
     parameters: {
       type: 'object',
       properties: {
@@ -58,7 +58,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_get_product',
-    description: 'Get full details of a product: variants, images, full description. Pass the product id from search results.',
+    description: 'MCP data fetch — gets full raw details of ONE product (variants, images, full description, live price) by id. This is the backend lookup, not the UI card: use it when YOU (Wasi) need the data to reason with (e.g. checking a variant price before adding to cart, or refreshing a foreign-currency price). When the USER wants to visually SEE a product\'s details on screen, call wasi_show_product_detail instead — that one renders the card; this one just returns JSON to you. Pass the product id from kapruka_search_products results (e.g. "CAKE00KA002034").',
     parameters: {
       type: 'object',
       properties: {
@@ -71,7 +71,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_list_categories',
-    description: 'Get the full Kapruka category tree. Use to show browsable categories or map user intent to a category.',
+    description: 'MCP data fetch — gets the full Kapruka category tree (JSON) so YOU can map user intent to an exact category name before searching or showing wasi_show_categories/wasi_browse_subcategories. Example: user says "what do you have for groceries" → call this, find the "Grocery" node, then either search within it or call wasi_browse_subcategories("Grocery") to show its children visually.',
     parameters: {
       type: 'object',
       properties: {
@@ -82,7 +82,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_list_delivery_cities',
-    description: 'Fuzzy-search Sri Lankan delivery cities. Call this before check_delivery to get the exact city name. Accepts English, Sinhala, or Tamil.',
+    description: 'Fuzzy-search Sri Lankan delivery cities. ALWAYS call this before kapruka_check_delivery — never guess or pass a raw user-spoken city name straight to check_delivery, aliases and neighborhood names fail there. Accepts English, Sinhala, or Tamil, and common neighborhood aliases: "Wellawatte"/"Wellawatta" → resolves toward a Colombo postal zone, "Nugegoda", "Kalubowila" both fall under Colombo suburbs, "Kaluwanchikudi"/"Kallady" are Batticaloa-area names. Pass whatever the user said verbatim (even misspelled or code-switched) — this tool does the fuzzy matching, you don\'t need to normalize it yourself. Take the exact "name" field from the result and use ONLY that for kapruka_check_delivery and kapruka_create_order — never re-use the user\'s original phrasing after this call.',
     parameters: {
       type: 'object',
       properties: {
@@ -93,7 +93,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_check_delivery',
-    description: 'Check delivery availability and ESTIMATED fee to a Sri Lankan city on a specific date. Always call kapruka_list_delivery_cities first to get the canonical city name. The rate returned is an ESTIMATE — the authoritative fee is in kapruka_create_order.summary.delivery_fee. For Jaffna and Batticaloa (frequently full), only call after you have both city and delivery date confirmed. Pass product_id for cakes, flowers, or combos to trigger a freshness warning if delivery is > 1 day out.',
+    description: 'Check delivery availability and ESTIMATED fee to a Sri Lankan city on a specific date. Always call kapruka_list_delivery_cities first to get the canonical city name — passing a raw alias or misspelling here returns an error, not a fuzzy match. The rate returned is an ESTIMATE — the authoritative fee is in kapruka_create_order.summary.delivery_fee. For Jaffna and Batticaloa (frequently full — verify EVERY time, don\'t assume from a past check), only call after you have both city and delivery date confirmed; if it returns full, immediately relay next_available_date to the user rather than silently retrying. Pass product_id for cakes, flowers, or combos to trigger a freshness warning if delivery is > 1 day out. Example: user wants a cake delivered to "Jaffna" tomorrow → kapruka_list_delivery_cities("Jaffna") → check_delivery(city="Jaffna", delivery_date=<tomorrow>, product_id=<cake id>).',
     parameters: {
       type: 'object',
       properties: {
@@ -106,7 +106,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_create_order',
-    description: 'Create a guest checkout order on Kapruka. Returns checkout_url (pay link, 60-min expiry), order_ref (ORD- pre-payment ref), and summary with the AUTHORITATIVE delivery_fee and grand_total. Always read fees from this result, not from check_delivery.',
+    description: 'Create a guest checkout order on Kapruka — this does NOT charge the customer, it only creates a PENDING order and a payment link the user still has to open and pay. Only call once cart, recipient, and delivery are all confirmed (use wasi_get_form_state / wasi_get_cart to verify first if unsure — never guess a missing field). Common mistakes to avoid: putting address/city inside "recipient" (they belong in "delivery"), using "items" instead of "cart" as the key, including an email field anywhere (MCP rejects it — Kapruka collects email at its own checkout page). Returns checkout_url (pay link, 60-min expiry), order_ref (ORD- pre-payment ref), and summary with the AUTHORITATIVE delivery_fee and grand_total — always read fees from this result, never from check_delivery\'s estimate. Example shape: {cart:[{product_id:"CAKE001",quantity:1}], recipient:{name:"Nirmala",phone:"0771234567"}, delivery:{address:"12 Galle Rd",city:"Colombo 03",date:"2026-07-10"}, sender:{name:"Kamal"}}.',
     parameters: {
       type: 'object',
       properties: {
@@ -161,7 +161,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'kapruka_track_order',
-    description: 'Track an existing Kapruka order. The order number is sent to the customer by email after payment is completed — it is an alphanumeric code like "VIMP34456CB2" (4-40 chars, letters + digits). This is different from the ORD-YYYYMMDD-XXXX pre-payment reference Wasi generates — T7 only works with the post-payment Kapruka number.',
+    description: 'Track an existing Kapruka order. The order number is sent to the customer by email after payment is completed — it is an alphanumeric code like "VIMP34456CB2" (4-40 chars, letters + digits). This is different from the ORD-YYYYMMDD-XXXX pre-payment reference Wasi generates — this tool only works with the post-payment Kapruka number. If the user gives you an ORD- reference instead and asks to "track" it, that order hasn\'t been paid for yet — tell them so and offer the pay link again rather than calling this tool with the wrong code.',
     parameters: {
       type: 'object',
       properties: {
@@ -172,7 +172,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_prefill_checkout',
-    description: 'WASI UI TOOL — Pre-fill checkout form. Call on EVERY user message containing name/city/phone/address/date/mode. CRITICAL: recipient_name = ACTUAL person name (Nirmala, Kumari), NOT role (Amma, Wife).\n\nTriggers: city, phone (077*/076*), address, date, proper names, sender name, order mode (for me / gift), location type.\n\nDo NOT ask for email — user enters it at Kapruka checkout to receive KAP tracking number.',
+    description: 'WASI UI TOOL — Pre-fill checkout form. Call on EVERY user message containing name/city/phone/address/date/mode, one field at a time as they mention it — don\'t wait to batch multiple fields into one call. CRITICAL: recipient_name = ACTUAL person name (Nirmala, Kumari), NOT role (Amma, Wife, Akka, Boss). If the user only gives a role ("send it to my wife"), ask for the actual name — don\'t pass the role string as recipient_name.\n\nTriggers: city ("Kandy", "Colombo 5", "Jaffna"), phone (077*/076*/071*/070*), address ("12 Galle Road", "near the temple"), date ("tomorrow", "this Friday", "avurudu day"), proper names, sender name ("it\'s from Kamal"), order mode ("for me" → self, "it\'s a gift" → gift), location type ("it\'s an apartment", "office address"). Sinhala: "eeka Kandy walata", "mage nama Kamal". Tamil: "adhu enakku", "en peyar Kamal".\n\nDo NOT ask for email — user enters it at Kapruka checkout to receive the KAP tracking number.',
     parameters: {
       type: 'object',
       properties: {
@@ -195,7 +195,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_add_to_cart',
-    description: 'WASI UI TOOL — Add product to the visual bundle. Call ONLY on explicit user consent.\n\nEnglish triggers: "add it", "add to cart", "add to bundle", "yes add", "ok add", "put it in", "I\'ll take it". Sinhala: "dannawa", "eka ganna", "eka dannawa", "ok dannawa". Tamil: "podunga", "sethunga", "kooda podunga".\n\nDo NOT call on: "looks good", "nice", "show me more", question marks, or product comparison. Only call when user clearly wants to proceed.',
+    description: 'WASI UI TOOL — Add product to the visual bundle. Call ONLY on explicit user consent, and only for a SPECIFIC product you\'ve already shown/discussed (from search results or a detail card) — never invent a product_id.\n\nEnglish triggers: "add it", "add to cart", "add to bundle", "yes add", "ok add", "put it in", "I\'ll take it", "get me that one". Sinhala: "dannawa", "eka ganna", "eka dannawa", "ok dannawa". Tamil: "podunga", "sethunga", "kooda podunga".\n\nDo NOT call on: "looks good", "nice", "show me more", question marks, price questions, or when comparing products ("which is cheaper" is not consent to add). If the user says "add both" after a comparison, call this tool twice, once per product. Example: user says "yeah add the chocolate cake" after you showed it → wasi_add_to_cart(product_id="CAKE00123", product_name="Chocolate Truffle Cake", price_lkr=3500, image_url=..., category="Cakes").',
     parameters: {
       type: 'object',
       properties: {
@@ -214,7 +214,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_order_now',
-    description: 'MANDATORY CHECKOUT — YOU MUST CALL THIS TO CREATE AN ORDER. User says: "checkout"/"pay"/"order now"/"confirm"/"do it"/"lock it"/"proceed"/"finalize"/"complete"/"yes checkout"/"ok done". Sinhala: "ganna"/"karanna"/"denna". Tamil: "podunga"/"sethunga"/"mudikka".\n\nDescribing checkout in text DOES NOTHING. Only calling this tool creates an order. Always fire this tool FIRST, then reply briefly.',
+    description: 'MANDATORY CHECKOUT — YOU MUST CALL THIS TO CREATE AN ORDER. User says: "checkout"/"pay"/"order now"/"confirm"/"do it"/"lock it"/"proceed"/"finalize"/"complete"/"yes checkout"/"ok done"/"place the order"/"that\'s all, order it". Sinhala: "ganna"/"karanna"/"denna". Tamil: "podunga"/"sethunga"/"mudikka".\n\nDescribing checkout in text DOES NOTHING — saying "Alright, placing your order now!" without calling this tool creates NO order and the user gets nothing. Only calling this tool creates an order. Before calling, make sure cart is non-empty and required checkout fields are filled (use wasi_get_cart / wasi_get_form_state if unsure) — if fields are missing, ask for them or show wasi_show_checkout_wizard instead of calling this prematurely. Always fire this tool FIRST, then reply briefly once you have the result (pay link).',
     parameters: {
       type: 'object',
       properties: {},
@@ -223,7 +223,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_get_cart',
-    description: 'WASI UI TOOL — Check what is currently in the cart. Returns the list of items, quantities, and total. Call when you need to verify cart state before making decisions (e.g. before offering checkout, or when user asks "what do I have in my cart?").',
+    description: 'WASI UI TOOL — Check what is currently in the cart. Returns the list of items (with product_code, name, price, quantity) and total. Call when: the user asks "what\'s in my cart" / "what did I add" / "how much so far", before calling wasi_order_now or kapruka_create_order to confirm the cart isn\'t empty, or before wasi_remove_from_cart/wasi_update_cart_quantity if you need the exact product_code and don\'t already have it from this conversation. Sinhala: "mata mokakda thiyenne cart eke". Tamil: "en cart-la enna irukku".',
     parameters: {
       type: 'object',
       properties: {},
@@ -232,7 +232,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_get_form_state',
-    description: 'WASI UI TOOL — Get current checkout form state: which fields are filled and which are missing. Returns the recipient_name, recipient_phone, city, address, email, and delivery_date status. Call BEFORE offering checkout to know exactly what info is still missing.',
+    description: 'WASI UI TOOL — Get current checkout form state: which fields are filled and which are missing (returns missing_fields array directly — read that instead of re-deriving it yourself). Call BEFORE offering checkout, and BEFORE calling wasi_order_now or kapruka_create_order, to know exactly what info is still missing rather than guessing or re-asking for something already filled. Also call right after wasi_show_checkout_wizard appears, since the user may fill it in directly without speaking — this is how you\'d notice.',
     parameters: {
       type: 'object',
       properties: {},
@@ -241,7 +241,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_show_progress',
-    description: 'WASI UI TOOL — Show a visual progress step in the chat interface. Call BEFORE long operations (searching, checking delivery, creating order). HARD RULE: Call EXACTLY ONCE per user turn, BEFORE the tool calls — never during or after. When firing parallel searches, call this once then both searches in the same turn. Duplicate progress messages break the UI.',
+    description: 'WASI UI TOOL — Show a visual progress step in the chat interface. Call BEFORE long operations (searching, checking delivery, creating order). HARD RULE: Call EXACTLY ONCE per user turn, BEFORE the tool calls — never during or after. When firing parallel searches, call this once then both searches in the same turn. Duplicate progress messages break the UI. Example steps: step="searching", message="Searching Kapruka for birthday cakes..."; step="checking_delivery", message="Checking if we can deliver to Jaffna tomorrow..."; step="creating_order", message="Placing your order...".',
     parameters: {
       type: 'object',
       properties: {
@@ -253,7 +253,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_remove_from_cart',
-    description: 'WASI UI TOOL — Remove a specific product from the cart. Call ONLY when user explicitly asks to remove, delete, or replace a specific item they name.\n\nTriggers (must name the item): "remove the cake", "delete the chocolate box", "take out the hamper", "I don\'t want the cake anymore", "remove it", "take it off".\nSinhala: "eka wenas karanna", "eka ganna epa"\nTamil: "adhai theiya podunga", "venda vendam"\n\nDo NOT call on: "change my mind", "show me something different" (that is a new search, not a remove).',
+    description: 'WASI UI TOOL — Remove a specific product from the cart. Call ONLY when user explicitly asks to remove, delete, or replace a specific item they name. If you don\'t already know its product_id from this conversation, call wasi_get_cart first to look it up — never guess an id.\n\nTriggers (must name the item): "remove the cake", "delete the chocolate box", "take out the hamper", "I don\'t want the cake anymore", "remove it", "take it off".\nSinhala: "eka wenas karanna", "eka ganna epa"\nTamil: "adhai theiya podunga", "venda vendam"\n\nDo NOT call on: "change my mind", "show me something different" (that is a new search, not a remove).',
     parameters: {
       type: 'object',
       properties: {
@@ -265,7 +265,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_update_cart_quantity',
-    description: 'WASI UI TOOL — Change the quantity of an item already in the cart. Call when user explicitly says "change to 2", "I want 3 of those", "make it 2 boxes".\n\nTriggers: "change quantity", "I want 2", "make it X", "update to X pieces".\nSet quantity=0 to remove the item (equivalent to wasi_remove_from_cart).',
+    description: 'WASI UI TOOL — Change the quantity of an item already in the cart. Call when user explicitly says "change to 2", "I want 3 of those", "make it 2 boxes". If you don\'t already know its product_id from this conversation, call wasi_get_cart first to look it up.\n\nTriggers: "change quantity", "I want 2", "make it X", "update to X pieces", "one more", "just one is enough".\nSet quantity=0 to remove the item (equivalent to wasi_remove_from_cart).',
     parameters: {
       type: 'object',
       properties: {
@@ -277,7 +277,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_show_checkout_wizard',
-    description: 'WASI UI TOOL — Show an interactive multi-step checkout wizard card INLINE in the chat. Call this when the user wants to fill in delivery/recipient details in a guided way instead of extracting them from freeform text. The wizard collects: recipient name, phone, city, address, delivery date, location type, gift message, and sender name — each as a validated step. Use when user says "fill in the details", "let me enter my info", "I want to type it in", or when the conversation naturally reaches the checkout info stage but no details have been provided yet. Also call when user seems overwhelmed with typing all details and would benefit from a guided form.',
+    description: 'WASI UI TOOL — MANDATORY the moment the user wants to check out ("checkout", "place order", "buy now", "let\'s order", "confirm", "I\'m ready to pay") and delivery/recipient details haven\'t been given yet. Call this FIRST, before asking for name/phone/city/address/date in text or by voice — this shows an interactive multi-step form INLINE in the chat instead of you extracting details from freeform speech/text, which is faster and far less error-prone (especially by voice, where names/phone numbers/addresses are easy to mishear). The wizard collects: recipient name, phone, city, address, delivery date, location type, gift message, and sender name — each as a validated step. Skip this only if the user has ALREADY given most details in freeform text/speech (then use wasi_prefill_checkout instead) or if a wizard is already visible (check for "[UI: checkout wizard card is visible...]" in context — don\'t re-call).',
     parameters: {
       type: 'object',
       properties: {
@@ -288,7 +288,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_show_product_detail',
-    description: 'WASI UI TOOL — MANDATORY when user shows interest in a specific product. Shows rich product detail card INLINE in the chat with image, full description, variants, shipping, and add-to-cart. You MUST call this tool whenever: (1) user asks "tell me more", "show details", "describe it", "full details", "more info", "what does it look like", "what are the variants", "show me that product", (2) you are describing a specific product to the user — ALWAYS pair your description with this tool call so the user can see the full card. If you mention a product by name, call this tool. NEVER just describe a product in text without calling this tool — the user needs to see the image, price, and add-to-cart button.\n\nTriggers: "tell me more", "show details", "describe it", "full details", "more info", "what is this product", "show me", "tell me about [product name]".\nSinhala: "wistarawa", "kohomada", "para wistara", "kiyanna".\nTamil: "vilakkamaga", "eppadi irukku", "vistaramaaga", "solluga".',
+    description: 'WASI UI TOOL — MANDATORY when user shows interest in a specific product, INCLUDING one already in their cart (e.g. "show me the details of that pen", "what does the cake I added look like") — this applies just as much to cart items as to fresh search results; use the product_id from CURRENT CART context or your own earlier tool calls in this session. Shows rich product detail card INLINE in the chat with image, full description, variants, shipping, and add-to-cart. You MUST call this tool whenever: (1) user asks "tell me more", "show details", "describe it", "full details", "more info", "what does it look like", "what are the variants", "show me that product", "show me that pen/cake/etc", (2) you are describing a specific product to the user — ALWAYS pair your description with this tool call so the user can see the full card. If you mention a product by name, call this tool. NEVER just describe a product in text without calling this tool — the user needs to see the image, price, and add-to-cart button, and a spoken description alone is not enough.\n\nTriggers: "tell me more", "show details", "describe it", "full details", "more info", "what is this product", "show me", "tell me about [product name]", "show me that [item] again".\nSinhala: "wistarawa", "kohomada", "para wistara", "kiyanna".\nTamil: "vilakkamaga", "eppadi irukku", "vistaramaaga", "solluga".',
     parameters: {
       type: 'object',
       properties: {
@@ -299,7 +299,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_compare_products',
-    description: 'WASI UI TOOL — MANDATORY when user wants to compare products. Shows inline comparison with LLM-generated insights highlighting key differences. Call when user says "compare these", "what\'s the difference", "which one is better", "help me choose between", "side by side", "which should I get", "vs", "or". Always pick the most relevant 2-3 products from search results. After calling this tool, your text response MUST include a brief comparison summary mentioning 2-3 key differences (price, quality, occasion fit) so the user can decide.\n\nSinhala: "me deka salakanna", "mokada differens", "ecken nada".\nTamil: "idhu rendaiyum compare pannu", "ethu nallathu", "edhu better".',
+    description: 'WASI UI TOOL — MANDATORY when user wants to compare products. Shows inline comparison with LLM-generated insights highlighting key differences. Call when user says "compare these", "what\'s the difference", "which one is better", "help me choose between", "side by side", "which should I get", "this one or that one". Note: a bare "or" in a sentence isn\'t always comparison intent ("cake or flowers, either works" is just flexibility, not a request to compare) — only call when the user is clearly asking you to help them decide between specific items you\'ve shown. Always pick the most relevant 2-3 products from search results. After calling this tool, your text response MUST include a brief comparison summary mentioning 2-3 key differences (price, quality, occasion fit) so the user can decide.\n\nSinhala: "me deka salakanna", "mokada differens", "ecken nada".\nTamil: "idhu rendaiyum compare pannu", "ethu nallathu", "edhu better".',
     parameters: {
       type: 'object',
       properties: {
@@ -314,7 +314,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_show_categories',
-    description: 'WASI UI TOOL — Show the store category menu as a visual grid. Call when user asks "what categories do you have", "browse by category", "what can you order", "show me what you sell", "what do you have", or wants to explore without a specific product in mind.\n\nSinhala: "mokakda thiyenne", "categories bala".\nTamil: "enna categories irukku", "enna vendaam".',
+    description: 'WASI UI TOOL — MANDATORY when the user wants to browse without a specific product in mind. Call when user asks "what categories do you have", "browse by category", "what can you order", "show me what you sell", "what do you have", just "browse" / "categories" on their own, or after wasi_new_order when they haven\'t said what they want yet. Show the visual grid — don\'t just list category names in speech/text.\n\nSinhala: "mokakda thiyenne", "categories bala".\nTamil: "enna categories irukku", "enna vendaam".',
     parameters: {
       type: 'object',
       properties: {},
@@ -334,7 +334,7 @@ export const KAPRUKA_TOOL_DECLARATIONS: ToolDeclaration[] = [
   },
   {
     name: 'wasi_new_order',
-    description: 'WASI UI TOOL — Start a brand new order. Clears the cart and resets the conversation. ALWAYS call this tool when user wants a new order — never just reply with text.\n\nTriggers: "new order", "new chat", "start fresh", "fresh start", "clear cart", "empty cart", "clear everything", "begin again", "start over", "reset", "try again", "new gift", "start new", "new search", "find something else".\n\nSinhala: "aluth order ekak", "meka adinna", "puna balamu".\nTamil: "pudhiya order", "mudiyattum", "therinhu aarambikalam".\n\nAfter calling this tool, greet the user warmly and ask what they\'d like to order.',
+    description: 'WASI UI TOOL — Start a brand new order. Clears the ENTIRE cart and resets checkout state. ALWAYS call this tool when user wants a new order — never just reply with text. This is different from wasi_remove_from_cart (removes ONE named item) — only use this one when the user means "start over completely", not "take that one thing out".\n\nTriggers: "new order", "new chat", "start fresh", "fresh start", "clear cart", "empty cart", "clear everything", "begin again", "start over", "reset", "try again", "new gift", "start new", "new search", "find something else", "scrap this and start again".\n\nSinhala: "aluth order ekak", "meka adinna", "puna balamu".\nTamil: "pudhiya order", "mudiyattum", "therinhu aarambikalam".\n\nAfter calling this tool, greet the user warmly and ask what they\'d like to order.',
     parameters: {
       type: 'object',
       properties: {},
