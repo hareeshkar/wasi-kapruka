@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Gift, Cake, Plus, ImagePlus, Send, X, ShoppingBag, Smartphone } from 'lucide-react';
+import { Gift, Cake, Plus, ImagePlus, Send, X, ShoppingBag, Smartphone, Radio } from 'lucide-react';
 import type { Message } from '../types';
 import WasiRobot from './WasiRobot';
+import LiveControlBar from './LiveControlBar';
 
 interface EmptyStatePlaceholderProps {
   lang?: 'en' | 'si' | 'ta';
@@ -13,6 +14,12 @@ interface EmptyStatePlaceholderProps {
   onSendVoice?: (audioBase64: string, mimeType: string) => void;
   onAddMessage?: (msg: Message) => void;
   onUpdateMessage?: (msgId: string, updates: Partial<Message>) => void;
+  onLiveToggle?: () => void;
+  isLiveActive?: boolean;
+  liveState?: 'idle' | 'connecting' | 'active' | 'disconnecting' | 'error';
+  liveIsMuted?: boolean;
+  onLiveToggleMic?: () => void;
+  liveElapsedLabel?: string;
 }
 
 // Rotating phrases — equal-length arrays (same count required for safe lang-switch mid-rotation)
@@ -93,6 +100,7 @@ function compressImage(file: File): Promise<{ data: string; mimeType: string }> 
 
 export default function EmptyStatePlaceholder({
   lang = 'en', isSignedIn, userName, onSignIn, onNewChat, onSendMessage, onSendVoice, onAddMessage, onUpdateMessage,
+  onLiveToggle, isLiveActive, liveState, liveIsMuted, onLiveToggleMic, liveElapsedLabel,
 }: EmptyStatePlaceholderProps) {
   const [inputText, setInputText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -389,6 +397,15 @@ export default function EmptyStatePlaceholder({
 
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={handleImageSelect} />
 
+            {isLiveActive ? (
+              <LiveControlBar
+                state={liveState ?? 'idle'}
+                isMuted={!!liveIsMuted}
+                elapsedLabel={liveElapsedLabel ?? '00:00'}
+                onToggleMic={() => onLiveToggleMic?.()}
+                onEnd={() => onLiveToggle?.()}
+              />
+            ) : (
             <div className="flex items-center w-full rounded-full transition-all duration-250"
               style={{
                 minHeight: '54px',
@@ -420,6 +437,9 @@ export default function EmptyStatePlaceholder({
                     <X className="w-[17px] h-[17px]" />
                   </button>
                 )}
+                <button type="button" onClick={onLiveToggle} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet/6 transition-colors cursor-pointer" style={{ color: 'rgba(64,41,112,0.35)' }} title="Start live voice">
+                  <Radio className="w-[17px] h-[17px]" />
+                </button>
                 <button type="submit" className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer"
                   style={isRecording
                     ? { background: 'linear-gradient(135deg, #DC3545 0%, #BD2130 100%)', boxShadow: '0 3px 10px rgba(220,53,69,0.30)' }
@@ -441,6 +461,7 @@ export default function EmptyStatePlaceholder({
                 </button>
               </div>
             </div>
+            )}
           </form>
 
           {/* Voice hands-free hint */}
