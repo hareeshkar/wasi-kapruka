@@ -12,7 +12,8 @@
     "test:mcp": "node tests/mcp-live.test.js",
     "test:smoke": "node spock-test.js",
     "test:live-router": "tsx tests/live-transcript-router.test.js",
-    "test:all": "npm run test:mcp && npm run test:smoke && npm run test:live-router"
+    "test:live-ui": "node tests/live-ui-mock-flow.test.js",
+    "test:all": "npm run test:mcp && npm run test:smoke && npm run test:live-router && npm run test:live-ui"
   },
   "dependencies": {
     "@google/genai": "^2.8.0",
