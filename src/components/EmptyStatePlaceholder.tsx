@@ -404,6 +404,7 @@ export default function EmptyStatePlaceholder({
                 elapsedLabel={liveElapsedLabel ?? '00:00'}
                 onToggleMic={() => onLiveToggleMic?.()}
                 onEnd={() => onLiveToggle?.()}
+                minHeight={54}
               />
             ) : (
             <div className="flex items-center w-full rounded-full transition-all duration-250"

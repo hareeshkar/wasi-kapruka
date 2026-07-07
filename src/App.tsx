@@ -137,6 +137,9 @@ export default function App() {
     onModelTranscript: (text) => {
       liveTranscriptRouterRef.current.onFragment('model', text);
     },
+    onTurnComplete: (role) => {
+      liveTranscriptRouterRef.current.endTurn(role);
+    },
     onToolCall: (name, args) => {
       console.log(`[Live/Tool] ${name}`, args);
     },
@@ -275,7 +278,13 @@ ${voiceInstructions}`;
       live.connect({ systemPrompt: sysPrompt, history });
     }
   }, [live, buildLiveSystemPrompt, buildLiveHistory]);
-  const isLiveActive = live.state === 'active' || live.state === 'connecting';
+  // 'error' is deliberately excluded — every onError call site sets
+  // shouldFallback=true, which already surfaces an in-thread fallback
+  // message (see the onError handler above), so instantly returning to the
+  // normal composer is the right UX rather than showing a dead-end error
+  // pill. 'disconnecting' IS included so the brief "Ending…" transition
+  // (see useGeminiLive's disconnect()) is actually visible.
+  const isLiveActive = live.state === 'active' || live.state === 'connecting' || live.state === 'disconnecting';
 
   // Normalize raw API product into our Product type
   const normalizeProductDetail = (raw: any, productCode: string): Product => ({

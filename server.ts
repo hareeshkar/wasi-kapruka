@@ -572,7 +572,30 @@ You have 15 tools. Every tool has a WHEN and a NEVER.
            - "pudhiya order" (Tamil)
            - "start new", "new search", "find something else"
   NEVER  : when user is mid-conversation and just wants to add/remove items
-  ACTION : Call this tool FIRST, then greet warmly: "Fresh start! What are we looking for today?"
+   ACTION : Call this tool FIRST, then greet warmly: "Fresh start! What are we looking for today?"
+
+[V13] wasi_show_checkout_wizard
+  params : order_mode? ("gift" | "self")
+  PURPOSE: Shows an interactive multi-step wizard card INLINE in the chat for collecting
+           delivery/recipient details. The wizard collects: recipient name, phone, city,
+           address, delivery date, location type, gift message, and sender name — each
+           as a validated step with a progress bar.
+  WHEN   : user says "fill in the details", "let me enter my info", "I want to type it in",
+           or when the conversation reaches the checkout info stage and would benefit from
+           a guided form. Also use when the user seems overwhelmed typing all details.
+  DUAL INPUT: The wizard works alongside natural language. When the wizard is visible:
+    - User can fill the form directly (step by step)
+    - User can ALSO type/speak naturally in chat → you call wasi_prefill_checkout to
+      auto-fill the wizard fields in real-time
+    - The wizard tracks which fields were auto-filled vs manually edited
+  AUTO-FILL BEHAVIOR: When you call wasi_prefill_checkout, the wizard picks up the
+    changes automatically. Continue calling wasi_prefill_checkout as usual — the wizard
+    listens to orderIntent updates.
+  COMPLETION: When all required fields are filled (name, phone, city, address, date),
+    the wizard shows a "Go to Cart & Checkout" prompt. The user clicks it to open
+    the CartDrawer with all details prefilled.
+  NEVER  : call this when the user has already provided all details via natural language
+           — use wasi_prefill_checkout + wasi_order_now instead
 
 ════════════════════════════════════════════════════════════
 §3  DECISION ENGINE — STATE MACHINE FOR EVERY TURN
@@ -2051,6 +2074,10 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
           if (toolCall.name === 'wasi_new_order') {
             return { _virtual: true, ...toolCall.args };
           }
+          // wasi_show_checkout_wizard — virtual tool, just pass args to client
+          if (toolCall.name === 'wasi_show_checkout_wizard') {
+            return { _virtual: true, ...toolCall.args };
+          }
           // wasi_show_categories — fetch live categories from Kapruka MCP
           if (toolCall.name === 'wasi_show_categories') {
             try {
@@ -2387,6 +2414,94 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
     } catch (err: any) {
       console.error('[STT] Gemini transcription failed:', sanitizeError(err));
       return res.status(500).json({ error: sanitizeError(err) });
+    }
+  });
+
+  // ── Live API: Ephemeral Token ──────────────────────────────────────────────
+  // Generates a short-lived token for browser-side Gemini Live API connections.
+  // The API key stays server-side; the browser uses this token to open a WebSocket.
+  //
+  // The ephemeral token bakes a `liveConnectConstraints.config` into itself, and
+  // the SDK switches to the BidiGenerateContentConstrained endpoint for any
+  // apiKey starting with `auth_tokens/`. That endpoint rejects the session if
+  // the client's `ai.live.connect({ config })` doesn't match the locked config
+  // (extra/missing fields → "Request contains an invalid argument"). So the
+  // constraint config here MUST mirror exactly what the client passes to
+  // connect() — see buildLiveConfig() on the client (useGeminiLive.ts).
+  app.post('/api/live-token', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
+
+      const { systemPrompt } = req.body || {};
+
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } });
+
+      const liveConfig: Record<string, any> = {
+        responseModalities: ['AUDIO'],
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+      };
+      if (systemPrompt) {
+        liveConfig.systemInstruction = { parts: [{ text: systemPrompt }] };
+      }
+
+      // newSessionExpireTime is the window to actually OPEN the WebSocket
+      // with this token — it defaults to just ~1 minute, separate from the
+      // token's overall validity. Widen it so slow networks/user hesitation
+      // between token fetch and connect() don't get rejected.
+      const newSessionExpireTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+      const token = await ai.authTokens.create({
+        config: {
+          uses: 1,
+          newSessionExpireTime,
+          liveConnectConstraints: {
+            model: 'gemini-3.1-flash-live-preview',
+            config: liveConfig,
+          },
+        },
+      });
+
+      res.json({ token: token.name, expiresAt: Date.now() + 5 * 60 * 1000 });
+    } catch (err: any) {
+      console.error('[Live] Token generation failed:', sanitizeError(err));
+      res.status(500).json({ error: sanitizeError(err) });
+    }
+  });
+
+  // ── Live API: Tool Execution ───────────────────────────────────────────────
+  // Executes a tool call from the Live API session. The browser sends tool name
+  // + args, this endpoint runs MCP tools and returns the result.
+  app.post('/api/live-tool', async (req, res) => {
+    try {
+      const { name, args } = req.body || {};
+      if (!name) return res.status(400).json({ error: 'name required' });
+
+      console.log(`  → [Live/Tool] ${name}`, JSON.stringify(args).substring(0, 120));
+
+      // Virtual tools — execute locally, return immediately
+      const VIRTUAL_TOOLS = [
+        'wasi_get_cart', 'wasi_get_form_state', 'wasi_add_to_cart',
+        'wasi_show_progress', 'wasi_prefill_checkout', 'wasi_order_now',
+        'wasi_remove_from_cart', 'wasi_update_cart_quantity',
+        'wasi_show_product_detail', 'wasi_compare_products',
+        'wasi_new_order', 'wasi_show_categories', 'wasi_browse_subcategories',
+        'wasi_convert_currency',
+      ];
+
+      if (VIRTUAL_TOOLS.includes(name)) {
+        // Virtual tools return their args as-is (client processes them)
+        return res.json({ result: { _virtual: true, ...args } });
+      }
+
+      // MCP tools — execute on server
+      const result = await callMcpTool(name, args || {}, false);
+      res.json({ result });
+    } catch (err: any) {
+      console.error('[Live] Tool execution failed:', sanitizeError(err));
+      res.status(500).json({ error: sanitizeError(err) });
     }
   });
 

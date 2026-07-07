@@ -40,6 +40,13 @@ export interface LiveCallbacks {
   onUserTranscript: (text: string) => void;
   /** Called when Gemini's response is transcribed (streaming, partial or final) */
   onModelTranscript: (text: string) => void;
+  /**
+   * Called when a role's turn ends — the consumer should stop appending
+   * further fragments to the current message and start a new one on the
+   * next transcript for that role. Fired for 'user' when the model starts
+   * responding (role switch), and for 'model' on turnComplete/interrupted.
+   */
+  onTurnComplete?: (role: 'user' | 'model') => void;
   /** Called when a tool call is received from the model */
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   /** Called when the session ends normally */
@@ -386,10 +393,20 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
             const content = msg.serverContent;
             if (!content) return;
 
-            // Interruption — clear playback queue (user barge-in)
+            // Interruption — clear playback queue (user barge-in) and close
+            // out the model's in-progress turn so the next reply starts a
+            // fresh message instead of appending to the cut-off one.
             if (content.interrupted) {
               clearPlaybackQueue();
+              callbacksRef.current.onTurnComplete?.('model');
               return;
+            }
+
+            // Any model content means the model has started responding —
+            // the user's turn is over. Close it before appending the
+            // model's content so the two don't merge into one message.
+            if (content.modelTurn?.parts || content.outputTranscription?.text) {
+              callbacksRef.current.onTurnComplete?.('user');
             }
 
             // Audio chunks → queue for speaker playback
@@ -415,6 +432,11 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
             // Output transcription (model speech → show in chat)
             if (content.outputTranscription?.text) {
               callbacksRef.current.onModelTranscript(content.outputTranscription.text);
+            }
+
+            // Model's response finished — next model speech starts a new message.
+            if (content.turnComplete) {
+              callbacksRef.current.onTurnComplete?.('model');
             }
           },
 
@@ -481,10 +503,15 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
 
   // ── Disconnect ────────────────────────────────────────────────────────────
   const disconnect = useCallback(() => {
+    // Two synchronous setState calls in one tick would batch to just the
+    // final value — 'disconnecting' would never actually render. Give it a
+    // brief real window so the control bar's "Ending…" state is visible.
     setState('disconnecting');
     cleanup();
-    setState('idle');
-    callbacksRef.current.onEnd?.();
+    setTimeout(() => {
+      setState('idle');
+      callbacksRef.current.onEnd?.();
+    }, 150);
   }, [cleanup]);
 
   // ── Send text message (mid-conversation) ──────────────────────────────────

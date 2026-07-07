@@ -8,7 +8,7 @@
  * (see WasiRobot.tsx's GOLD_SOUL) rather than a generic waveform or a
  * literal copy of iOS's rainbow Siri orb — same character, just active.
  */
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Mic, MicOff, PhoneOff } from 'lucide-react';
 
 export interface LiveControlBarProps {
@@ -17,6 +17,8 @@ export interface LiveControlBarProps {
   elapsedLabel: string;
   onToggleMic: () => void;
   onEnd: () => void;
+  /** Match the surrounding composer's height exactly (48px in ChatSection, 54px in EmptyStatePlaceholder) — avoids a footer height jump when live mode toggles on. */
+  minHeight?: number;
 }
 
 const STATE_LABELS: Record<LiveControlBarProps['state'], string> = {
@@ -30,6 +32,8 @@ const STATE_LABELS: Record<LiveControlBarProps['state'], string> = {
 function SoulOrb({ state, isMuted }: { state: LiveControlBarProps['state']; isMuted: boolean }) {
   const isError = state === 'error';
   const isLive = state === 'active' && !isMuted;
+  const prefersReducedMotion = useReducedMotion();
+  const shouldSpin = isLive && !prefersReducedMotion;
 
   return (
     <div className="relative w-7 h-7 shrink-0 rounded-full" aria-hidden="true">
@@ -43,30 +47,34 @@ function SoulOrb({ state, isMuted }: { state: LiveControlBarProps['state']; isMu
           boxShadow: isLive ? '0 0 12px rgba(232,201,107,0.45)' : '0 2px 8px rgba(64,41,112,0.25)',
         }}
       />
-      {/* Gold sheen ring — rotates while live, static glow otherwise */}
+      {/* Gold sheen ring — rotates while live, static glow otherwise.
+          prefers-reduced-motion is honored via useReducedMotion() (not a
+          CSS animate-none class, which has no effect on framer-motion's
+          JS/WAAPI-driven transform animations). */}
       <motion.div
-        className="absolute inset-[-2px] rounded-full motion-reduce:animate-none"
+        className="absolute inset-[-2px] rounded-full"
         style={{
           background: 'conic-gradient(from 0deg, #E8C96B, transparent 30%, transparent 70%, #E8C96B)',
           opacity: isError ? 0 : isLive ? 0.9 : 0.35,
           maskImage: 'radial-gradient(circle, transparent 55%, black 58%)',
           WebkitMaskImage: 'radial-gradient(circle, transparent 55%, black 58%)',
         }}
-        animate={isLive ? { rotate: 360 } : { rotate: 0 }}
-        transition={isLive ? { duration: 1.6, repeat: Infinity, ease: 'linear' } : { duration: 0.3 }}
+        animate={shouldSpin ? { rotate: 360 } : { rotate: 0 }}
+        transition={shouldSpin ? { duration: 1.6, repeat: Infinity, ease: 'linear' } : { duration: 0.3 }}
       />
     </div>
   );
 }
 
-export default function LiveControlBar({ state, isMuted, elapsedLabel, onToggleMic, onEnd }: LiveControlBarProps) {
+export default function LiveControlBar({ state, isMuted, elapsedLabel, onToggleMic, onEnd, minHeight = 48 }: LiveControlBarProps) {
   const isBusy = state === 'connecting' || state === 'disconnecting';
+  const micLabel = isMuted ? 'Unmute mic' : 'Mute mic';
 
   return (
     <div
       className="flex items-center w-full rounded-full gap-2 px-3"
       style={{
-        minHeight: '54px',
+        minHeight: `${minHeight}px`,
         background: 'rgba(255,255,255,0.80)',
         backdropFilter: 'blur(12px)',
         border: state === 'error' ? '1.5px solid rgba(244,63,94,0.30)' : '1.5px solid rgba(139,92,246,0.25)',
@@ -89,7 +97,8 @@ export default function LiveControlBar({ state, isMuted, elapsedLabel, onToggleM
         type="button"
         onClick={onToggleMic}
         disabled={!(state === 'active')}
-        title={isMuted ? 'Unmute mic' : 'Mute mic'}
+        title={micLabel}
+        aria-label={micLabel}
         className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all disabled:opacity-30 ${
           isMuted ? 'bg-gray-200 text-gray-500' : 'bg-violet-tint text-violet'
         }`}
@@ -102,6 +111,7 @@ export default function LiveControlBar({ state, isMuted, elapsedLabel, onToggleM
         onClick={onEnd}
         disabled={isBusy}
         title="End live session"
+        aria-label="End live session"
         className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-rose-500 text-white transition-all disabled:opacity-40"
       >
         <PhoneOff className="w-4 h-4" />
