@@ -385,22 +385,12 @@ export function toGeminiFunctionDeclaration(tool: ToolDeclaration) {
   };
 }
 
-// Tools exposed to the Gemini Live voice session — mirrors the six tools
-// documented in App.tsx's buildLiveSystemPrompt voice instructions. Kept to
-// a small, stable subset (not the full KAPRUKA_TOOL_DECLARATIONS list)
-// because this array is duplicated field-for-field between server.ts's
-// ephemeral-token liveConnectConstraints.config and the client's
-// ai.live.connect() config — see server.ts's /api/live-token route and
-// useGeminiLive.ts's connect().
-export const LIVE_VOICE_TOOL_NAMES = [
-  'kapruka_search_products',
-  'kapruka_get_product',
-  'kapruka_list_categories',
-  'kapruka_list_delivery_cities',
-  'kapruka_check_delivery',
-  'kapruka_create_order',
-] as const;
-
-export const LIVE_VOICE_TOOL_DECLARATIONS: ToolDeclaration[] = KAPRUKA_TOOL_DECLARATIONS.filter(
-  (t) => (LIVE_VOICE_TOOL_NAMES as readonly string[]).includes(t.name)
-);
+// Tools exposed to the Gemini Live voice session — full parity with the
+// text-chat tool set (KAPRUKA_TOOL_DECLARATIONS), so voice can search,
+// manage the cart, show product/comparison/category cards, and check out,
+// same as typed chat. This array is duplicated field-for-field between
+// server.ts's ephemeral-token liveConnectConstraints.config and the
+// client's ai.live.connect() config — see server.ts's /api/live-token
+// route and useGeminiLive.ts's connect() — so any change here must be
+// made once, in this shared module, not independently on each side.
+export const LIVE_VOICE_TOOL_DECLARATIONS: ToolDeclaration[] = KAPRUKA_TOOL_DECLARATIONS;

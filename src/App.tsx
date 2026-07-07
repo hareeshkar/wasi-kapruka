@@ -146,6 +146,9 @@ export default function App() {
     onToolCall: (name, args) => {
       console.log(`[Live/Tool] ${name}`, args);
     },
+    onToolResult: (name, args, result) => {
+      void applyLiveToolResult(name, args, result);
+    },
     onEnd: () => {
       liveTranscriptRouterRef.current.reset();
     },
@@ -244,11 +247,23 @@ CAPABILITIES — YOU HAVE TOOLS TO HELP:
 - Search products: kapruka_search_products(q, category, max_price, min_price, sort, limit)
 - Get product details: kapruka_get_product(product_id, currency)
 - List categories: kapruka_list_categories(depth)
-- Check delivery: kapruka_check_delivery(product_id, city_name, quantity)
-- List delivery cities: kapruka_list_delivery_cities(query)
-- Create order: kapruka_create_order(...)
+- List delivery cities: kapruka_list_delivery_cities(query) — call before check_delivery
+- Check delivery: kapruka_check_delivery(city, delivery_date, product_id)
+- Create order: kapruka_create_order(cart, recipient details, ...)
+- Track an order: kapruka_track_order(order_ref or order_id)
+
+You ALSO have the same cart/UI tools as typed chat — use them exactly the same way:
+- wasi_add_to_cart / wasi_remove_from_cart / wasi_update_cart_quantity — mutate the visible cart
+- wasi_get_cart — check what's already in the cart before adding more
+- wasi_prefill_checkout — save recipient name/phone/city/address/date as the user tells you, one at a time
+- wasi_show_product_detail(product_id) / wasi_compare_products(product_ids) — show a visual card for something you're discussing
+- wasi_show_categories / wasi_browse_subcategories — show a visual category grid if the user wants to browse
+- wasi_show_checkout_wizard — offer the visual step-by-step form if the user seems overwhelmed listing details by voice
+- wasi_new_order — start a fresh order (clears the cart)
+- wasi_convert_currency — convert cart total to the user's currency if they ask
 
 When the user asks about products, USE THE TOOLS. Don't just describe from memory.
+Whenever you call a tool that has a visual result (search, product detail, comparison, categories, order confirmation), it will ALSO appear as a card in the chat — you don't need to describe every field out loud, just confirm the gist ("Found a lovely bouquet, it's on your screen too").
 ${cartContext}${budgetContext}${profileContext}${currencyContext}
 
 LIVE CLOCK — Asia/Colombo (use for ALL date calculations):
@@ -953,6 +968,87 @@ ${voiceInstructions}`;
     await processDeferredTools(state);
 
     return replyMsg;
+  };
+
+  /**
+   * Live voice equivalent of processAndApplyToolResponse. Gemini Live calls
+   * tools one at a time, out-of-band from any single "reply" object (the
+   * spoken/transcribed reply is handled separately by liveTranscriptRouter),
+   * so this applies the SAME side effects (cart, order, prefill, product/
+   * comparison/category cards) per individual tool call instead of per
+   * batched chat response — reusing processToolCalls/processDeferredTools
+   * so voice and text stay behaviorally identical.
+   */
+  const applyLiveToolResult = async (name: string, args: Record<string, unknown>, result: any) => {
+    const state = processToolCalls([{ toolName: name, args, result }], { budget, orderIntent });
+
+    // Execute side-effect actions (same switch as processAndApplyToolResponse)
+    for (const action of state.actions) {
+      switch (action.type) {
+        case 'add_to_cart':
+          handleAddToCart(action.product, action.variant, true);
+          break;
+        case 'remove_from_cart':
+          handleRemoveItem(action.productId);
+          break;
+        case 'update_cart':
+          handleUpdateQty(action.productId, action.quantity);
+          break;
+        case 'show_progress': {
+          const dup = messagesRef.current.slice(-10).some(m => m.content === `*${action.message}*`);
+          if (dup) break;
+          void addMessage({
+            id: `progress-${Date.now()}-${action.step}`,
+            role: 'assistant' as const,
+            content: `*${action.message}*`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+          break;
+        }
+      }
+    }
+
+    // Apply state changes
+    if (state.currentPrefill) setOrderIntent(state.currentPrefill);
+    if (state.orderCreated) setOrderResult(state.orderCreated);
+    if (state.shouldClearCart) {
+      await clearCart();
+      setOrderIntent(null);
+    }
+    if (state.shouldOrderNow) {
+      const order = await handleChatOrder(state.currentPrefill || orderIntent);
+      if (order) {
+        state.orderCreated = order;
+        setOrderResult(order);
+      }
+    }
+
+    // Visual-only card (no text content — Wasi's spoken reply is already
+    // streaming into the thread separately) for anything with a visual:
+    // search results, delivery cities, order confirmation, tracking.
+    const withinBudget = filterByBudget(state.linkedProducts, budget);
+    const hasVisual = withinBudget.length > 0 || state.suggestedCities.length > 0
+      || !!state.orderCreated || !!state.trackingData || state.shouldShowCheckoutWizard;
+    if (hasVisual) {
+      void addMessage({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        products: withinBudget.length > 0 ? withinBudget : undefined,
+        city_suggest: state.suggestedCities.length > 0 ? state.suggestedCities : undefined,
+        order_created: state.orderCreated,
+        tracking_result: state.trackingData,
+        order_intent: state.orderCreated ? (state.currentPrefill || orderIntent || undefined) : undefined,
+        search_cursor: state.lastSearchCursor,
+        checkout_wizard: state.shouldShowCheckoutWizard || undefined,
+        checkout_wizard_mode: state.shouldShowCheckoutWizard ? state.checkoutWizardMode : undefined,
+      });
+      if (withinBudget.length > 0) prefetchProductDetails(withinBudget);
+    }
+
+    // Post-call deferred processing (product detail, compare, categories)
+    await processDeferredTools(state);
   };
 
   // Serialise cart for AI context — include product_code so LLM knows exact IDs

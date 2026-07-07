@@ -50,6 +50,13 @@ export interface LiveCallbacks {
   onTurnComplete?: (role: 'user' | 'model') => void;
   /** Called when a tool call is received from the model */
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
+  /**
+   * Called after a tool call has executed successfully — the consumer
+   * should apply any UI side effects (cart mutations, product cards,
+   * order confirmation, etc.), mirroring what the text-chat flow does
+   * with the same tool result via processToolCalls/processAndApplyToolResponse.
+   */
+  onToolResult?: (name: string, args: Record<string, unknown>, result: any) => void;
   /** Called when the session ends normally */
   onEnd?: () => void;
   /** Called on error — consumer should fall back to text chat */
@@ -253,9 +260,19 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
       const data = await res.json();
       const result = data.result ?? data.error ?? { error: 'Tool execution failed' };
 
-      // Send tool response back to the model (synchronous per 3.1 docs)
+      // Apply UI side effects (cart, product cards, order confirmation…)
+      // using the same result shape the text-chat flow's processToolCalls
+      // consumes — before sending the (possibly wrapped) response below.
+      callbacksRef.current.onToolResult?.(name, args, result);
+
+      // Send tool response back to the model (synchronous per 3.1 docs).
+      // FunctionResponse.response is a protobuf Struct (must be a JSON
+      // object) — some MCP tools (e.g. kapruka_list_categories) return a
+      // bare array, which the API rejects with "Proto field is not
+      // repeating" and closes the session. Wrap non-object results.
+      const response = (result && typeof result === 'object' && !Array.isArray(result)) ? result : { result };
       sessionRef.current?.sendToolResponse({
-        functionResponses: [{ id, name, response: result }],
+        functionResponses: [{ id, name, response }],
       });
     } catch (err: any) {
       console.error('[Live] Tool call failed:', name, err);
@@ -332,6 +349,9 @@ export function useGeminiLive(callbacks: LiveCallbacks): UseGeminiLiveReturn {
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         tools: [{ functionDeclarations: LIVE_VOICE_TOOL_DECLARATIONS.map(toGeminiFunctionDeclaration) }],
+        // Required for gemini-3.1-flash-live-preview to accept the
+        // sendClientContent history-seeding call below — see server.ts.
+        historyConfig: { initialHistoryInClientContent: true },
       };
       if (opts.systemPrompt) {
         config.systemInstruction = { parts: [{ text: opts.systemPrompt }] };

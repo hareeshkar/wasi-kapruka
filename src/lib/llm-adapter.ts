@@ -31,11 +31,10 @@ import type { ToolDeclaration } from './tool-declarations.js';
 import {
   KAPRUKA_TOOL_DECLARATIONS,
   toGeminiFunctionDeclaration,
-  LIVE_VOICE_TOOL_NAMES,
   LIVE_VOICE_TOOL_DECLARATIONS,
 } from './tool-declarations.js';
 export type { ToolDeclaration };
-export { KAPRUKA_TOOL_DECLARATIONS, toGeminiFunctionDeclaration, LIVE_VOICE_TOOL_NAMES, LIVE_VOICE_TOOL_DECLARATIONS };
+export { KAPRUKA_TOOL_DECLARATIONS, toGeminiFunctionDeclaration, LIVE_VOICE_TOOL_DECLARATIONS };
 
 /** A single turn in the conversation. */
 export interface ChatMessage {

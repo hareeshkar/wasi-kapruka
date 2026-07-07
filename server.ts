@@ -2444,6 +2444,10 @@ The user sent a VOICE MESSAGE. The audio is attached as inlineData in the user m
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         tools: [{ functionDeclarations: LIVE_VOICE_TOOL_DECLARATIONS.map(toGeminiFunctionDeclaration) }],
+        // Required for gemini-3.1-flash-live-preview to accept sendClientContent
+        // at all — without it, seeding initial history closes the session
+        // with "Request contains an invalid argument" right after setupComplete.
+        historyConfig: { initialHistoryInClientContent: true },
       };
       if (systemPrompt) {
         liveConfig.systemInstruction = { parts: [{ text: systemPrompt }] };
