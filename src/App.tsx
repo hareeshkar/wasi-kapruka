@@ -915,7 +915,7 @@ ${voiceInstructions}`;
     }
     if (state.shouldClearCart) {
       await clearCart();
-      setOrderIntent(null);
+      resetCheckoutState();
     }
     if (state.shouldOrderNow) {
       const order = await handleChatOrder(state.currentPrefill || orderIntent);
@@ -1054,7 +1054,7 @@ ${voiceInstructions}`;
     if (state.orderCreated) setOrderResult(state.orderCreated);
     if (state.shouldClearCart) {
       await clearCart();
-      setOrderIntent(null);
+      resetCheckoutState();
     }
     if (state.shouldOrderNow) {
       const order = await handleChatOrder(state.currentPrefill || orderIntent);
@@ -1563,6 +1563,24 @@ ${voiceInstructions}`;
     setOrderError(null);
   };
 
+  const resetCheckoutState = () => {
+    setOrderIntent(null);
+    setOrderResult(null);
+    setOrderError(null);
+    setPaymentModalOpen(false);
+    setIsOrdering(false);
+  };
+
+  const handleNewChat = async () => {
+    await clearCart();
+    resetCheckoutState();
+    const conv = await createConv({ language });
+    if (conv) {
+      setActiveConvId(conv.id);
+      clearMessages();
+    }
+  };
+
   // Checkout order placement
   const handleConfirmOrder = async (recipient: {
     name: string;
@@ -1911,12 +1929,7 @@ ${voiceInstructions}`;
 
           {/* New conversation */}
           <button
-            onClick={async () => {
-              await clearCart();
-              setOrderIntent(null);
-              const conv = await createConv({ language });
-              if (conv) { setActiveConvId(conv.id); clearMessages(); }
-            }}
+            onClick={() => { void handleNewChat(); }}
             className="sidebar-item"
             title="New conversation"
           >
@@ -2112,12 +2125,7 @@ ${voiceInstructions}`;
       {/* ── Mobile tab bar — horizontal echo of the desktop glass pill, shown only below 640px ── */}
       <nav className={`mobile-tabbar ${composerFocused ? 'mobile-tabbar-collapsed' : ''}`} aria-label="Primary">
         <button
-          onClick={async () => {
-            await clearCart();
-            setOrderIntent(null);
-            const conv = await createConv({ language });
-            if (conv) { setActiveConvId(conv.id); clearMessages(); }
-          }}
+          onClick={() => { void handleNewChat(); }}
           className="mobile-tabbar-item"
           title="New conversation"
         >
@@ -2208,15 +2216,7 @@ ${voiceInstructions}`;
             isSignedIn={!!user}
             userName={profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') || undefined : undefined}
             onSignIn={() => setSignInOpen(true)}
-            onNewChat={async () => {
-              await clearCart();
-              setOrderIntent(null);
-              const conv = await createConv({ language });
-              if (conv) {
-                setActiveConvId(conv.id);
-                clearMessages();
-              }
-            }}
+            onNewChat={() => { void handleNewChat(); }}
             onSendMessage={handleSendMessage}
             onSendVoice={handleSendVoice}
             onAddMessage={addMessage}
@@ -2237,15 +2237,7 @@ ${voiceInstructions}`;
             onRetryMessage={handleRetryMessage}
             onAddMessage={addMessage}
             onUpdateMessage={updateMessage}
-            onNewChat={async () => {
-              await clearCart();
-              setOrderIntent(null);
-              const conv = await createConv({ language });
-              if (conv) {
-                setActiveConvId(conv.id);
-                clearMessages();
-              }
-            }}
+            onNewChat={() => { void handleNewChat(); }}
             lang={language}
             onAddToBundle={handleAddToCart}
             onViewDetails={handleViewDetails}
@@ -2375,15 +2367,7 @@ ${voiceInstructions}`;
       {/* ── New Conversation FAB (always visible when there are messages) ─── */}
       {messages.length > 0 && (
         <button
-          onClick={async () => {
-            await clearCart();
-            setOrderIntent(null);
-            const conv = await createConv({ language });
-            if (conv) {
-              setActiveConvId(conv.id);
-              clearMessages();
-            }
-          }}
+          onClick={() => { void handleNewChat(); }}
           className="new-convo-fab fixed bottom-20 right-6 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 hover:shadow-xl cursor-pointer"
           style={{
             background: 'linear-gradient(135deg, #5B3E8A 0%, #402970 100%)',
